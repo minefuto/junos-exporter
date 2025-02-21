@@ -1,0 +1,79 @@
+general:
+  port: 9326
+  prefix: junos
+  optables_dir: ./op/
+  textfsm_dir: ./textfsm/
+
+modules:
+  router:
+    username: admin
+    password: admin@123
+    tables:
+      - ArpTable
+      - EthPortTable
+  switch:
+    username: admin
+    password: admin@123
+    tables:
+      - ArpTable
+      - EthPortTable
+
+optables:
+  ArpTable:
+    metrics:
+      - name: arp_entry_info
+        value: 1
+        type: gauge
+        help: arp entry info
+    labels:
+      - name: mac
+        value: mac_address
+      - name: address
+        value: ip_address
+      - name: interface
+        value: interface
+  EthPortTable:
+    metrics:
+      - name: interface_link_status
+        value: oper
+        type: gauge
+        help: physical interface link status(up:2, down:1)
+        value_transform:
+          up: 2
+          down: 1
+      - name: interface_admin_status
+        value: oper
+        type: gauge
+        help: physical interface admin status(up:2, down:1)
+        value_transform:
+          up: 2
+          down: 1
+      - name: interface_mtu
+        value: mtu
+        type: gauge
+        help: physical interface mtu
+      - name: interface_input_bytes
+        value: rx_bytes
+        type: counter
+        help: physical interface input bytes counter
+      - name: interface_output_bytes
+        value: tx_bytes
+        type: counter
+        help: physical interface output bytes counter
+      - name: interface_input_packets
+        value: rx_packets
+        type: counter
+        help: physical interface input packets counter
+      - name: interface_output_packets
+        value: tx_packets
+        type: counter
+        help: physical interface output packets counter
+    labels:
+      - name: interface
+        value: name
+      - name: description
+        value: description
+      - name: link_mode
+        value: link_mode
+      - name: mac
+        value: macaddr
