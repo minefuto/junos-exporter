@@ -1,7 +1,7 @@
 [project]
 name = "junos-exporter"
 version = "0.1.0"
-description = "Junos Exporter using PyEZ Tables and Views"
+description = "Prometheus Exporter for Junos using PyEZ Tables and Views"
 authors = [
   {name = "minefuto", email = "minefuto@gmail.com"}
 ]
