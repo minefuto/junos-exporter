@@ -4,7 +4,7 @@ from .config import Config, Label, Metric
 from .connector import Connector
 
 
-class MetricTransformer:
+class MetricConverter:
     def __init__(self, metric: Metric, labels: list[Label], prefix: str):
         if metric.type_ == "counter":
             self.name = f"{prefix}_{metric.name}_total"
@@ -16,7 +16,7 @@ class MetricTransformer:
         self.value_transform = metric.value_transform
         self.labels = labels
 
-    def transform(self, items: list[dict]) -> str:
+    def convert(self, items: list[dict]) -> str:
         exposition = []
         exposition.append(f"# HELP {self.name} {self.help_}")
         exposition.append(f"# TYPE {self.name} {self.type_}")
@@ -76,15 +76,15 @@ class MetricTransformer:
 
 
 class Exporter:
-    def __init__(self, transformer: dict[str, list[MetricTransformer]]) -> None:
-        self.transformer = transformer
+    def __init__(self, converter: dict[str, list[MetricConverter]]) -> None:
+        self.converter = converter
 
     def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
-        for name, metrics in self.transformer.items():
+        for name, metrics in self.converter.items():
             exposition.append(
                 "\n".join(
-                    [metric.transform(connector.collect(name)) for metric in metrics]
+                    [metric.convert(connector.collect(name)) for metric in metrics]
                 )
             )
         return "\n".join(exposition)
@@ -92,24 +92,24 @@ class Exporter:
 
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
-        self.transformers = {}
+        self.converters = {}
         for name, module in config.modules.items():
-            transformer = {}
+            converter = {}
             for table in module.tables:
-                transformer[table] = [
-                    MetricTransformer(
+                converter[table] = [
+                    MetricConverter(
                         metric,
                         labels=config.optables[table].labels,
                         prefix=config.prefix,
                     )
                     for metric in config.optables[table].metrics
                 ]
-            self.transformers[name] = transformer
+            self.converters[name] = converter
 
     def build(self, module_name: str) -> Exporter:
-        if module_name not in self.transformers:
+        if module_name not in self.converters:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"module({module_name}) is not defined",
             )
-        return Exporter(self.transformers[module_name])
+        return Exporter(self.converters[module_name])
