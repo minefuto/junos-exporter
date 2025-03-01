@@ -1,13 +1,13 @@
 [project]
 name = "junos-exporter"
-version = "0.1.0"
+version = "0.0.1"
 description = "Prometheus Exporter for Junos using PyEZ Tables and Views"
 authors = [
   {name = "minefuto", email = "minefuto@gmail.com"}
 ]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.13"
 dependencies = [
     "fastapi>=0.115.8",
     "junos-eznc>=2.7.2",
