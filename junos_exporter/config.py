@@ -71,6 +71,8 @@ class Metric(BaseModel):
     @field_validator("value_transform", mode="before")
     @classmethod
     def to_defaultdict(cls, value_transform: dict) -> dict:
+        if default := value_transform.get("_"):
+            return defaultdict(lambda: float(default), value_transform)
         return defaultdict(lambda: "NaN", value_transform)
 
 

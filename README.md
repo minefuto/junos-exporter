@@ -55,6 +55,7 @@ optables:
         value_transform:  #(optional) if metrics value is str, can be transformed to float
           up: 2
           down: 1
+          _: 0 #(optional) value_transform's fallback value(default: NaN)
     labels:
       - name: interface  # label name
         value: name  # label value
