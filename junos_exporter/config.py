@@ -68,6 +68,7 @@ class Metric(BaseModel):
     help_: str = Field("", alias="help")
     regex: re.Pattern | None = None
     value_transform: DefaultDict[str, float] | None = None
+    to_unixtime: str | None = None
 
     @field_validator("regex", mode="before")
     @classmethod

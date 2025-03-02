@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import HTTPException, status
 
 from .config import Config, Label, Metric
@@ -15,6 +17,7 @@ class MetricConverter:
         self.help_ = metric.help_
         self.regex = metric.regex
         self.value_transform = metric.value_transform
+        self.to_unixtime = metric.to_unixtime
         self.labels = labels
 
     def convert(self, items: list[dict]) -> str:
@@ -81,6 +84,15 @@ class MetricConverter:
                 exposition.append(
                     f"{self.name}{{{','.join(label_exposition)}}} {self.value_transform[value]}"
                 )
+            elif self.to_unixtime:
+                try:
+                    exposition.append(
+                        f"{self.name}{{{','.join(label_exposition)}}} {float(datetime.strptime(value, self.to_unixtime).timestamp()) * 1000}"
+                    )
+                except ValueError:
+                    exposition.append(
+                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
+                    )
             else:
                 try:
                     exposition.append(

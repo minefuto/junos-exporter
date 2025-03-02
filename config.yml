@@ -48,6 +48,12 @@ optables:
         value_transform:
           up: 2
           down: 1
+      - name: interface_lastflap_seconds
+        value: interface_flapped
+        type: counter
+        regex: (\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*
+        to_unixtime: "%Y-%m-%d %H:%M:%S"
+        help: physical interface link flap timestamp
       - name: interface_mtu
         value: mtu
         type: gauge

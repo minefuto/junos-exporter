@@ -55,7 +55,13 @@ optables:
         value_transform:  #(optional) if metrics value is str, can be transformed to float
           up: 2
           down: 1
-          _: 0 #(optional) value_transform's fallback value(default: NaN)
+          _: 0  #(optional) value_transform's fallback value(default: NaN)
+      - name: interface_lastflap_seconds
+        value: interface_flapped
+        type: counter
+        regex: (\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*  #(optional) metric value can be extracted by using regexp
+        to_unixtime: "%Y-%m-%d %H:%M:%S"  # transform to unixtime by strptime(str, to_unixtime).timestamp()
+        help: physical interface link flap timestamp
     labels:
       - name: interface  # label name
         value: name  # label value
