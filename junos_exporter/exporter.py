@@ -13,6 +13,7 @@ class MetricConverter:
         self.value = metric.value
         self.type_ = metric.type_
         self.help_ = metric.help_
+        self.regex = metric.regex
         self.value_transform = metric.value_transform
         self.labels = labels
 
@@ -43,7 +44,10 @@ class MetricConverter:
                     continue
                 # label regex is hitting
                 else:
-                    label_exposition.append(f'{label.name}="{match.group()}"')
+                    try:
+                        label_exposition.append(f'{label.name}="{match.group(1)}"')
+                    except IndexError:
+                        continue
 
             if self.value not in item:
                 try:
@@ -51,20 +55,36 @@ class MetricConverter:
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} {float(self.value)}"
                     )
+                    continue
                 except ValueError:
                     # value is not type change to float
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} NaN"
                     )
+                    continue
 
-            elif self.value_transform:
+            value = item[self.value]
+            if self.regex is not None:
+                match = self.regex.match(value)
+                if match is None:
+                    exposition.append(
+                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
+                    )
+                    continue
+                else:
+                    try:
+                        value = match.group(1)
+                    except IndexError:
+                        value = match.group()
+
+            if self.value_transform:
                 exposition.append(
-                    f"{self.name}{{{','.join(label_exposition)}}} {self.value_transform[item[self.value]]}"
+                    f"{self.name}{{{','.join(label_exposition)}}} {self.value_transform[value]}"
                 )
             else:
                 try:
                     exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} {float(item[self.value])}"
+                        f"{self.name}{{{','.join(label_exposition)}}} {float(value)}"
                     )
                 except ValueError:
                     # value is not type change to float

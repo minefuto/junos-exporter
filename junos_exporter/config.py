@@ -66,7 +66,15 @@ class Metric(BaseModel):
     value: str
     type_: Literal["untyped", "counter", "gauge"] = Field("untyped", alias="type")
     help_: str = Field("", alias="help")
+    regex: re.Pattern | None = None
     value_transform: DefaultDict[str, float] | None = None
+
+    @field_validator("regex", mode="before")
+    @classmethod
+    def to_re_pattern(cls, regex: str) -> re.Pattern:
+        if not isinstance(regex, str):
+            raise ValueError(f"regex({regex}) is not a str")
+        return re.compile(regex)
 
     @field_validator("value_transform", mode="before")
     @classmethod

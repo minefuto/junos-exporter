@@ -61,7 +61,7 @@ optables:
         value: name  # label value
       - name: description
         value: description
-        regex: .*  #(optional) label values can be extracted by using regexp
+        regex: (.*)  #(optional) label values can be extracted by using regexp
       - name: link_mode
         value: link_mode
       - name: mac
