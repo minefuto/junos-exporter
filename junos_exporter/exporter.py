@@ -59,7 +59,7 @@ class MetricConverter:
                         f"{self.name}{{{','.join(label_exposition)}}} {float(self.value)}"
                     )
                     continue
-                except ValueError:
+                except (ValueError, TypeError):
                     # value is not type change to float
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} NaN"
@@ -89,7 +89,7 @@ class MetricConverter:
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} {float(datetime.strptime(value, self.to_unixtime).timestamp()) * 1000}"
                     )
-                except ValueError:
+                except (ValueError, TypeError):
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} NaN"
                     )
@@ -98,7 +98,7 @@ class MetricConverter:
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} {float(value)}"
                     )
-                except ValueError:
+                except (ValueError, TypeError):
                     # value is not type change to float
                     exposition.append(
                         f"{self.name}{{{','.join(label_exposition)}}} NaN"

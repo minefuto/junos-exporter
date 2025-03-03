@@ -92,6 +92,9 @@ class Connector:
         except RpcError:
             # cannot get rpc
             return []
+        except AttributeError:
+            # https://github.com/Juniper/py-junos-eznc/issues/1366
+            return []
 
         items = []
         if isinstance(table, CMDTable):
@@ -112,13 +115,17 @@ class Connector:
         elif isinstance(table, OpTable):
             for t in table:
                 item = {}
-                if type(t.key) is tuple:
-                    for i, n in enumerate(t.key):
-                        item[f"key.{i}"] = n
-                        item[f"name.{i}"] = n
-                else:
-                    item["key"] = t.key
-                    item["name"] = t.key
+                try:
+                    if type(t.key) is tuple:
+                        for i, n in enumerate(t.key):
+                            item[f"key.{i}"] = n
+                            item[f"name.{i}"] = n
+                    else:
+                        item["key"] = t.key
+                        item["name"] = t.key
+                except ValueError:
+                    # key is not defined
+                    pass
 
                 for k, v in t.items():
                     item[k] = v
