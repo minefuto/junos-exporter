@@ -7,28 +7,29 @@ PyEZ can extract information from Junos operational command output and map it to
 So, this exporter's metrics can be flexibly configured by simply editing yaml.  
 
 ## Usage
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/minefuto/junos-exporter.git
-    cd junos-exporter
-    ```
-2. Configure the exporter by editing the `config.yml`
-3. Run the exporter:
-    ```bash
-    uv run -m junos_exporter
-    ```
+
+### Docker
+```bash
+docker run -v <config file>:/app/config.yml ghcr.io/minefuto/junos-exporter
+```
+
+### Pip
+```
+pip install junos-exporter
+junos-exporter --config <config file>
+```
 
 ## Configuration
 Please see the `config.yml` for configuration example.
 
-#### Create Exporter Config
+### Create Exporter Config
 ```yaml
 general:
   port: 9326  # exporter's listen port
   prefix: junos  # prefix of the metrics
 ```
 
-#### Create PyEZ Operational Tables
+### Create PyEZ Operational Tables
 - [Parsing Structured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/task/junos-pyez-tables-op-defining.html)
 - [parsing Unstructured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/topic-map/junos-pyez-tables-op-unstructured-output-defining.html)
   - [Using TextFSM Template](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-using-textfsm-templates.html)
@@ -43,7 +44,7 @@ If using the following predefined operational table, you can skip this step.
 - [Document](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-predefined.html)
   - [Source Code](https://github.com/Juniper/py-junos-eznc/tree/master/lib/jnpr/junos/op)
 
-#### Create Convert Rule
+### Create Convert Rule
 ```yaml
 optables:
   EthPortTable:  # pyez table name
@@ -122,7 +123,7 @@ optables:
         help: arp entry info
 ```
 
-#### Create Junos Device Config
+### Create Junos Device Config
 ```yaml
 modules:
   router:  # module name
@@ -133,7 +134,7 @@ modules:
       - EthPortTable
 ```
 
-#### Create Prometheus Config
+### Create Prometheus Config
 ```yaml
 scrape_configs:
   - job_name: "junos-exporter"

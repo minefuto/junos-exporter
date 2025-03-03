@@ -12,7 +12,7 @@ class MetricConverter:
             self.name = f"{prefix}_{metric.name}_total"
         else:
             self.name = f"{prefix}_{metric.name}"
-        self.value = metric.value
+        self.value_name = metric.value
         self.type_ = metric.type_
         self.help_ = metric.help_
         self.regex = metric.regex
@@ -20,59 +20,58 @@ class MetricConverter:
         self.to_unixtime = metric.to_unixtime
         self.labels = labels
 
+    def _label_convert(self, item: dict) -> list[str]:
+        label_exposition = []
+        for label in self.labels:
+            # label value missing
+            if label.value not in item:
+                continue
+
+            # label value is None
+            if item[label.value] is None:
+                continue
+
+            # label regex is not defined
+            if not label.regex:
+                label_exposition.append(f'{label.name}="{item[label.value]}"')
+                continue
+
+            match = label.regex.match(item[label.value])
+            # label regex is not hitting
+            if match is None:
+                continue
+            # label regex is hitting
+            else:
+                try:
+                    label_exposition.append(f'{label.name}="{match.group(1)}"')
+                except IndexError:
+                    continue
+        return label_exposition
+
     def convert(self, items: list[dict]) -> str:
         exposition = []
         exposition.append(f"# HELP {self.name} {self.help_}")
         exposition.append(f"# TYPE {self.name} {self.type_}")
 
         for item in items:
-            label_exposition = []
-            for label in self.labels:
-                # label value missing
-                if label.value not in item:
-                    continue
-
-                # label value is None
-                if item[label.value] is None:
-                    continue
-
-                # label regex is not defined
-                if not label.regex:
-                    label_exposition.append(f'{label.name}="{item[label.value]}"')
-                    continue
-
-                match = label.regex.match(item[label.value])
-                # label regex is not hitting
-                if match is None:
-                    continue
-                # label regex is hitting
-                else:
-                    try:
-                        label_exposition.append(f'{label.name}="{match.group(1)}"')
-                    except IndexError:
-                        continue
-
-            if self.value not in item:
+            label_exposition = ",".join(self._label_convert(item))
+            if self.value_name not in item:
                 try:
                     # static value
                     exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} {float(self.value)}"
+                        f"{self.name}{{{label_exposition}}} {float(self.value_name)}"
                     )
                     continue
                 except (ValueError, TypeError):
                     # value is not type change to float
-                    exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
-                    )
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
                     continue
 
-            value = item[self.value]
+            value = item[self.value_name]
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
-                    exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
-                    )
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
                     continue
                 else:
                     try:
@@ -82,27 +81,23 @@ class MetricConverter:
 
             if self.value_transform:
                 exposition.append(
-                    f"{self.name}{{{','.join(label_exposition)}}} {self.value_transform[value]}"
+                    f"{self.name}{{{label_exposition}}} {self.value_transform[value]}"
                 )
             elif self.to_unixtime:
                 try:
                     exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} {float(datetime.strptime(value, self.to_unixtime).timestamp()) * 1000}"
+                        f"{self.name}{{{label_exposition}}} {float(datetime.strptime(value, self.to_unixtime).timestamp()) * 1000}"
                     )
                 except (ValueError, TypeError):
-                    exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
-                    )
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
             else:
                 try:
                     exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} {float(value)}"
+                        f"{self.name}{{{label_exposition}}} {float(value)}"
                     )
                 except (ValueError, TypeError):
                     # value is not type change to float
-                    exposition.append(
-                        f"{self.name}{{{','.join(label_exposition)}}} NaN"
-                    )
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
 
         return "\n".join(exposition) + "\n"
 

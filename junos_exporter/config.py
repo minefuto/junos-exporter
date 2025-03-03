@@ -92,16 +92,14 @@ class OpTable(BaseModel):
 
 class Config:
     _instance: "Config | None" = None
-    _config_path: str
 
     def __new__(cls, config_path: str) -> "Config":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._config_path = config_path
         return cls._instance
 
     def __init__(self, config_path: str) -> None:
-        with open(self._config_path, "r") as f:
+        with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
         self.general = General(**config["general"])

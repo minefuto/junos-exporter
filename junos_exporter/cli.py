@@ -24,7 +24,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
-app = FastAPI(default_response_class=PlainTextResponse, lifespan=lifespan)
+app = FastAPI(
+    title="junos-exporter", default_response_class=PlainTextResponse, lifespan=lifespan
+)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -37,7 +39,7 @@ def get_connector(target: str, module: str) -> Generator[Connector, None, None]:
         yield connector
 
 
-@app.get("/metrics")
+@app.get("/metrics", tags=["metrics"])
 def collect(
     target: str, module: str, connector: Connector = Depends(get_connector)
 ) -> str:
