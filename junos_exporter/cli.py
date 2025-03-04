@@ -59,7 +59,12 @@ def cli() -> None:
         )
         args = parser.parse_args()
         config = Config(args.config)
-        uvicorn.run("junos_exporter.cli:app", host="0.0.0.0", port=config.port)
+        uvicorn.run(
+            "junos_exporter.cli:app",
+            host="0.0.0.0",
+            port=config.port,
+            log_config="log_config.yml",
+        )
     except FileNotFoundError:
         sys.exit(f"config file({os.path.abspath(args.config)}) is not found")
     except ValidationError as e:
