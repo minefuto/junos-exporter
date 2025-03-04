@@ -133,10 +133,13 @@ optables:
 
 ### Create Junos Device Config
 ```yaml
-modules:
-  router:  # module name
+credentials:
+  vjunos: # credential name
     username: admin  # junos device's username
     password: admin@123  # junos device's password
+
+modules:
+  router:  # module name
     tables:  # pyez table name(which pyez table information to retrieve in this module)
       - ArpTable
       - EthPortTable
@@ -151,13 +154,17 @@ scrape_configs:
           - "192.168.1.1"  # target device
           - "192.168.1.2"
         labels:
-          module: "router"  # module name
+          __meta_credential: "vjunos"  # credential name
+          __meta_module: "router"  # module name
       - targets:
           - "192.168.10.3"
         labels:
-          module: "switch"
+          __meta_credential: "vjunos"
+          __meta_module: "switch"
     relabel_configs:
-      - source_labels: [module]
+      - source_labels: [__meta_credential]
+        target_label: __param_credential
+      - source_labels: [__meta_module]
         target_label: __param_module
       - source_labels: [__address__]
         target_label: __param_target

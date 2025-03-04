@@ -1,16 +1,17 @@
 general:
   prefix: junos
 
-modules:
-  router:
+credentials:
+  vjunos:
     username: admin
     password: admin@123
+
+modules:
+  router:
     tables:
       - ArpTable
       - EthPortTable
   switch:
-    username: admin
-    password: admin@123
     tables:
       - ArpTable
       - EthPortTable

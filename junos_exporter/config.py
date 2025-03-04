@@ -19,9 +19,12 @@ class General(BaseModel):
     prefix: str = "junos"
 
 
-class Module(BaseModel):
+class Credential(BaseModel):
     username: str
     password: str
+
+
+class Module(BaseModel):
     tables: list[str]
 
     @field_validator("tables", mode="before")
@@ -103,6 +106,12 @@ class Config:
             )
 
         self.general = General(**config["general"])
+        self.credentials = {
+            name: Credential.model_validate(
+                credential, context={"optables": config["optables"]}
+            )
+            for name, credential in config["credentials"].items()
+        }
         self.modules = {
             name: Module.model_validate(
                 module, context={"optables": config["optables"]}

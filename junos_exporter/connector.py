@@ -49,17 +49,17 @@ from jnpr.junos.op.teddb import TedSummaryTable, TedTable
 from jnpr.junos.op.vlan import VlanTable
 from jnpr.junos.op.xcvr import XcvrTable
 
-from .config import Config, Module
+from .config import Config, Credential
 
 
 class Connector:
     def __init__(
-        self, host: str, username: str, password: str, textfsm_dir: str | None
+        self, host: str, credential: Credential, textfsm_dir: str | None
     ) -> None:
         self.device: Device = None
         self.host: str = host
-        self.username: str = username
-        self.password: str = password
+        self.username: str = credential.username
+        self.password: str = credential.password
         self.textfsm_dir: str | None = textfsm_dir
 
     def __enter__(self) -> "Connector":
@@ -77,7 +77,7 @@ class Connector:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.device.close()
 
-    def collect(self, name) -> list[dict]:
+    def collect(self, name: str) -> list[dict]:
         if issubclass(globals()[name], CMDTable):
             if self.textfsm_dir is None:
                 table = globals()[name](self.device)
@@ -102,8 +102,8 @@ class Connector:
             for t in table:
                 key, table = t
                 item = {}
-                if type(name) is tuple:
-                    for i, n in enumerate(name):
+                if type(key) is tuple:
+                    for i, n in enumerate(key):
                         item[f"key.{i}"] = n
                         item[f"name.{i}"] = n
                 else:
@@ -136,6 +136,28 @@ class Connector:
 
         return items
 
+    def debug(self, name: str) -> list[dict]:
+        if issubclass(globals()[name], CMDTable):
+            if self.textfsm_dir is None:
+                table = globals()[name](self.device)
+            else:
+                table = globals()[name](self.device, template_dir=self.textfsm_dir)
+        elif issubclass(globals()[name], OpTable):
+            table = globals()[name](self.device)
+        else:
+            raise NotImplementedError
+
+        try:
+            table.get()
+        except RpcError:
+            # cannot get rpc
+            return []
+        except AttributeError:
+            # https://github.com/Juniper/py-junos-eznc/issues/1366
+            return []
+
+        return table.to_json()
+
 
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
@@ -151,7 +173,7 @@ class ConnecterBuilder:
         elif os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
             self.textfsm_dir = os.path.expanduser("~/.junos-exporter/textfsm")
 
-        self.modules: dict[str, Module] = config.modules
+        self.credentials: dict[str, Credential] = config.credentials
         self._load_optables()
 
     def _load_optables(self) -> None:
@@ -161,15 +183,14 @@ class ConnecterBuilder:
             if re.match(r".+\.(yml|yaml)$", yml):
                 globals().update(loadyaml(yaml.safe_load(yml)))
 
-    def build(self, host: str, module_name: str) -> Connector:
-        if module_name not in self.modules:
+    def build(self, host: str, credential_name: str) -> Connector:
+        if credential_name not in self.credentials:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"module({module_name}) is not defined",
+                detail=f"credential({credential_name}) is not defined",
             )
         return Connector(
             host=host,
-            username=self.modules[module_name].username,
-            password=self.modules[module_name].password,
+            credential=self.credentials[credential_name],
             textfsm_dir=self.textfsm_dir,
         )

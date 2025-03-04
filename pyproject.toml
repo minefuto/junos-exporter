@@ -24,7 +24,7 @@ build-backend = "hatchling.build"
 Repository = "https://github.com/minefuto/junos-exporter.git"
 
 [project.scripts]
-junos-exporter = "junos_exporter.cli:cli"
+junos-exporter = "junos_exporter.__main__:cli"
 
 [dependency-groups]
 dev = [
