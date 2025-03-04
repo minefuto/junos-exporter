@@ -8,15 +8,26 @@ So, this exporter's metrics can be flexibly configured by simply editing yaml.
 
 ## Usage
 
+```sh
+usage: junos-exporter [-h] [-p PORT] [-w WORKERS]
+
+options:
+  -h, --help            show this help message and exit
+  -p PORT, --port PORT  listening port[default: 9326]
+  -w WORKERS, --workers WORKERS
+                        number of worker processes[default: 1]
+```
+
 ### Docker
 ```bash
 docker run -v <config file>:/app/config.yml ghcr.io/minefuto/junos-exporter
 ```
 
 ### Pip
+Put the config file in "~/.junos-exporter/config.yml".
 ```
 pip install junos-exporter
-junos-exporter --config <config file>
+junos-exporter
 ```
 
 ## Configuration
@@ -25,7 +36,6 @@ Please see the `config.yml` for configuration example.
 ### Create Exporter Config
 ```yaml
 general:
-  port: 9326  # exporter's listen port
   prefix: junos  # prefix of the metrics
 ```
 
@@ -34,12 +44,10 @@ general:
 - [parsing Unstructured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/topic-map/junos-pyez-tables-op-unstructured-output-defining.html)
   - [Using TextFSM Template](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-using-textfsm-templates.html)
 
-Please store the following configured(config.yml) directory.
-```yaml
-general:
-  optables_dir: ./op/  # store the structured & unstructured tables and views configuration file 
-  textfsm_dir: ./textfsm/  # store the textfsm template file
-```
+Put the yaml or textfsm file in the following directory.
+- `./op/` or `~/.junos-exporter/op/` : structured & unstructured tables and views configuration file
+- `./textfsm/` or `~/.junos-exporter/textfsm/` : textfsm template file
+
 If using the following predefined operational table, you can skip this step.
 - [Document](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-predefined.html)
   - [Source Code](https://github.com/Juniper/py-junos-eznc/tree/master/lib/jnpr/junos/op)

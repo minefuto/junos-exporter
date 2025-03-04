@@ -1,6 +1,4 @@
 import argparse
-import os
-import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Generator
@@ -8,17 +6,17 @@ from typing import Generator
 import uvicorn
 from fastapi import Depends, FastAPI
 from fastapi.responses import PlainTextResponse
-from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import Config
 from .connector import ConnecterBuilder, Connector
 from .exporter import Exporter, ExporterBuilder
 
+config = Config()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    config = Config.get()
     app.exporter = ExporterBuilder(config)  # type: ignore
     app.connector = ConnecterBuilder(config)  # type: ignore
     yield
@@ -48,24 +46,27 @@ def collect(
 
 
 def cli() -> None:
-    try:
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "-c",
-            "--config",
-            type=str,
-            default="config.yml",
-            help="configuration file path",
-        )
-        args = parser.parse_args()
-        config = Config(args.config)
-        uvicorn.run(
-            "junos_exporter.cli:app",
-            host="0.0.0.0",
-            port=config.port,
-            log_config="log_config.yml",
-        )
-    except FileNotFoundError:
-        sys.exit(f"config file({os.path.abspath(args.config)}) is not found")
-    except ValidationError as e:
-        sys.exit(f"config file({os.path.abspath(args.config)}) is invalid.\n{e}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=9326,
+        help="listening port[default: 9326]",
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=1,
+        help="number of worker processes[default: 1]",
+    )
+
+    args = parser.parse_args()
+    uvicorn.run(
+        "junos_exporter.cli:app",
+        host="0.0.0.0",
+        port=args.port,
+        workers=args.workers,
+        log_config="log_config.yml",
+    )

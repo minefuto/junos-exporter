@@ -1,3 +1,4 @@
+import os
 import re
 from glob import glob
 
@@ -138,8 +139,18 @@ class Connector:
 
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
-        self.optables_dir: str | None = config.optables_dir
-        self.textfsm_dir: str | None = config.textfsm_dir
+        self.optabels_dir: str | None = None
+        if os.path.isdir("./op"):
+            self.optables_dir = "./op"
+        elif os.path.isdir(os.path.expanduser("~/.junos-exporter/op")):
+            self.optables_dir = os.path.expanduser("~/.junos-exporter/op")
+
+        self.textfsm_dir: str | None = None
+        if os.path.isdir("./textfsm"):
+            self.textfsm_dir = "./textfsm"
+        elif os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
+            self.textfsm_dir = os.path.expanduser("~/.junos-exporter/textfsm")
+
         self.modules: dict[str, Module] = config.modules
         self._load_optables()
 

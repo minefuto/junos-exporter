@@ -1,8 +1,5 @@
 general:
-  port: 9326
   prefix: junos
-  optables_dir: ./op/
-  textfsm_dir: ./textfsm/
 
 modules:
   router:

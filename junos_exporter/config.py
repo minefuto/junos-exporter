@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from collections import defaultdict
 from typing import DefaultDict, Literal
 
@@ -8,24 +9,14 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     ValidationInfo,
     field_validator,
 )
 
 
 class General(BaseModel):
-    port: int = 9326
     prefix: str = "junos"
-    optables_dir: str | None = None
-    textfsm_dir: str | None = None
-
-    @field_validator("optables_dir", "textfsm_dir", mode="after")
-    @classmethod
-    def check_exist_dir(cls, path: str) -> str:
-        abs_path = os.path.abspath(path)
-        if not os.path.isdir(abs_path):
-            raise ValueError(f"directory({abs_path}) does not exist")
-        return abs_path
 
 
 class Module(BaseModel):
@@ -91,16 +82,25 @@ class OpTable(BaseModel):
 
 
 class Config:
-    _instance: "Config | None" = None
+    def __init__(self) -> None:
+        config = {}
 
-    def __new__(cls, config_path: str) -> "Config":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        config_location = [
+            "config.yml",
+            os.path.expanduser("~/.junos-exporter/config.yml"),
+        ]
+        for c in config_location:
+            if os.path.isfile(c):
+                try:
+                    with open(c, "r") as f:
+                        config = yaml.safe_load(f)
+                except ValidationError as e:
+                    sys.exit(f"failed to load config file.\n{e}")
 
-    def __init__(self, config_path: str) -> None:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
+        if not config:
+            sys.exit(
+                "config file(./config.yml or ~/.junos-exporter/config.yml) is not found."
+            )
 
         self.general = General(**config["general"])
         self.modules = {
@@ -113,22 +113,6 @@ class Config:
             name: OpTable(**optable) for name, optable in config["optables"].items()
         }
 
-    @classmethod
-    def get(cls) -> "Config | None":
-        return cls._instance
-
-    @property
-    def port(self) -> int:
-        return self.general.port
-
     @property
     def prefix(self) -> str:
         return self.general.prefix
-
-    @property
-    def optables_dir(self) -> str | None:
-        return self.general.optables_dir
-
-    @property
-    def textfsm_dir(self) -> str | None:
-        return self.general.textfsm_dir
