@@ -54,19 +54,34 @@ from .config import Config, Credential
 
 class Connector:
     def __init__(
-        self, host: str, credential: Credential, textfsm_dir: str | None
+        self,
+        host: str,
+        credential: Credential,
+        textfsm_dir: str | None,
+        ssh_config: str | None,
     ) -> None:
         self.device: Device = None
         self.host: str = host
         self.username: str = credential.username
         self.password: str = credential.password
         self.textfsm_dir: str | None = textfsm_dir
+        self.ssh_config: str | None = ssh_config
 
     def __enter__(self) -> "Connector":
         try:
-            self.device = Device(
-                host=self.host, user=self.username, password=self.password
-            ).open()
+            if self.ssh_config is not None:
+                self.device = Device(
+                    host=self.host,
+                    user=self.username,
+                    password=self.password,
+                    ssh_config=self.ssh_config,
+                ).open()
+            else:
+                self.device = Device(
+                    host=self.host,
+                    user=self.username,
+                    password=self.password,
+                ).open()
         except ConnectError:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -174,6 +189,7 @@ class ConnecterBuilder:
             self.textfsm_dir = os.path.expanduser("~/.junos-exporter/textfsm")
 
         self.credentials: dict[str, Credential] = config.credentials
+        self.ssh_config: str | None = config.ssh_config
         self._load_optables()
 
     def _load_optables(self) -> None:
@@ -193,4 +209,5 @@ class ConnecterBuilder:
             host=host,
             credential=self.credentials[credential_name],
             textfsm_dir=self.textfsm_dir,
+            ssh_config=self.ssh_config,
         )

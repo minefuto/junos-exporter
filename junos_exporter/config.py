@@ -17,6 +17,15 @@ from pydantic import (
 
 class General(BaseModel):
     prefix: str = "junos"
+    ssh_config: str | None = None
+
+    @field_validator("ssh_config", mode="after")
+    @classmethod
+    def check_exist_file(cls, path: str) -> str:
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isfile(abs_path):
+            raise ValueError(f"file({abs_path}) does not exist")
+        return abs_path
 
 
 class Credential(BaseModel):
@@ -125,3 +134,7 @@ class Config:
     @property
     def prefix(self) -> str:
         return self.general.prefix
+
+    @property
+    def ssh_config(self) -> str | None:
+        return self.general.ssh_config
