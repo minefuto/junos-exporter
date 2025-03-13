@@ -1,5 +1,9 @@
 # junos-exporter
 
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/junos-exporter)
+![PyPI](https://img.shields.io/pypi/v/junos-exporter)
+![GitHub](https://img.shields.io/github/license/minefuto/junos-exporter)
+
 ## Overview
 This is a Prometheus Exporter for Junos using PyEZ([Juniper/py-junos-eznc](https://github.com/Juniper/py-junos-eznc)) Tables and Views.  
 PyEZ can extract information from Junos operational command output and map it to a Python data structure via yaml.  

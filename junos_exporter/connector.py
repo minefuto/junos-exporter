@@ -184,9 +184,11 @@ class ConnecterBuilder:
 
         self.textfsm_dir: str | None = None
         if os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
-            self.textfsm_dir = os.path.expanduser("~/.junos-exporter/textfsm")
+            self.textfsm_dir = os.path.abspath(
+                os.path.expanduser("~/.junos-exporter/textfsm")
+            )
         elif os.path.isdir("./textfsm"):
-            self.textfsm_dir = "./textfsm"
+            self.textfsm_dir = os.path.abspath("./textfsm")
 
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
