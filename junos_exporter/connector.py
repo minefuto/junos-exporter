@@ -177,16 +177,16 @@ class Connector:
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
         self.optabels_dir: str | None = None
-        if os.path.isdir("./op"):
-            self.optables_dir = "./op"
-        elif os.path.isdir(os.path.expanduser("~/.junos-exporter/op")):
+        if os.path.isdir(os.path.expanduser("~/.junos-exporter/op")):
             self.optables_dir = os.path.expanduser("~/.junos-exporter/op")
+        elif os.path.isdir("./op"):
+            self.optables_dir = "./op"
 
         self.textfsm_dir: str | None = None
-        if os.path.isdir("./textfsm"):
-            self.textfsm_dir = "./textfsm"
-        elif os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
+        if os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
             self.textfsm_dir = os.path.expanduser("~/.junos-exporter/textfsm")
+        elif os.path.isdir("./textfsm"):
+            self.textfsm_dir = "./textfsm"
 
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config

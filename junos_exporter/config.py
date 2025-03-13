@@ -70,7 +70,7 @@ class Metric(BaseModel):
     type_: Literal["untyped", "counter", "gauge"] = Field("untyped", alias="type")
     help_: str = Field("", alias="help")
     regex: re.Pattern | None = None
-    value_transform: DefaultDict[str, float] | None = None
+    value_transform: DefaultDict[str | bool, float] | None = None
     to_unixtime: str | None = None
 
     @field_validator("regex", mode="before")
