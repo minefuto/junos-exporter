@@ -73,7 +73,7 @@ optables:
         value: interface_flapped
         type: counter
         regex: (\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*  #(optional) metric value can be extracted by using regexp
-        to_unixtime: "%Y-%m-%d %H:%M:%S"  # transform to unixtime by strptime(str, to_unixtime).timestamp()
+        to_unixtime: True  # transform to unixtime for timestamp/uptime  e.g. 2025-03-22 12:57:10, 10w3d 11:11:11
         help: physical interface link flap timestamp
     labels:
       - name: interface  # label name

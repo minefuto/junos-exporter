@@ -1,4 +1,5 @@
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 
@@ -7,7 +8,13 @@ from .connector import Connector
 
 
 class MetricConverter:
-    def __init__(self, metric: Metric, labels: list[Label], prefix: str):
+    def __init__(
+        self,
+        metric: Metric,
+        labels: list[Label],
+        prefix: str,
+        unixtime_regex: dict[str, re.Pattern],
+    ):
         if metric.type_ == "counter":
             self.name = f"{prefix}_{metric.name}_total"
         else:
@@ -19,8 +26,59 @@ class MetricConverter:
         self.value_transform = metric.value_transform
         self.to_unixtime = metric.to_unixtime
         self.labels = labels
+        self.unixtime_regex = unixtime_regex
 
-    def _label_convert(self, item: dict) -> list[str]:
+    def _convert_to_unixtime(self, value: str) -> float:
+        if result := self.unixtime_regex["timestamp"].search(value):
+            return float(
+                datetime.strptime(result.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                * 1000
+            )
+
+        init_time = datetime.fromtimestamp(0)
+        if result := self.unixtime_regex["wd_uptime"].search(value):
+            return float(
+                (
+                    init_time
+                    + timedelta(
+                        weeks=int(result.group(1)),
+                        days=int(result.group(2)),
+                        hours=int(result.group(3)),
+                        minutes=int(result.group(4)),
+                        seconds=int(result.group(5)),
+                    )
+                ).timestamp()
+                * 1000
+            )
+        elif result := self.unixtime_regex["d_uptime"].search(value):
+            return float(
+                (
+                    init_time
+                    + timedelta(
+                        days=int(result.group(1)),
+                        hours=int(result.group(2)),
+                        minutes=int(result.group(3)),
+                        seconds=int(result.group(4)),
+                    )
+                ).timestamp()
+                * 1000
+            )
+        elif result := self.unixtime_regex["uptime"].search(value):
+            return float(
+                (
+                    init_time
+                    + timedelta(
+                        hours=int(result.group(1)),
+                        minutes=int(result.group(2)),
+                        seconds=int(result.group(3)),
+                    )
+                ).timestamp()
+                * 1000
+            )
+        else:
+            return float(0)
+
+    def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
         for label in self.labels:
             # label value missing
@@ -50,28 +108,28 @@ class MetricConverter:
 
     def convert(self, items: list[dict]) -> str:
         exposition = []
-        exposition.append(f"# HELP {self.name} {self.help_}")
-        exposition.append(f"# TYPE {self.name} {self.type_}")
+        exposition.append(f"# HELP {self.name} {self.help_}\n")
+        exposition.append(f"# TYPE {self.name} {self.type_}\n")
 
         for item in items:
-            label_exposition = ",".join(self._label_convert(item))
+            label_exposition = ",".join(self._convert_label(item))
             if self.value_name not in item:
                 try:
                     # static value
                     exposition.append(
-                        f"{self.name}{{{label_exposition}}} {float(self.value_name)}"
+                        f"{self.name}{{{label_exposition}}} {float(self.value_name)}\n"
                     )
                     continue
                 except (ValueError, TypeError):
                     # value is not type change to float
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
                     continue
 
             value = item[self.value_name]
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
                     continue
                 else:
                     try:
@@ -81,25 +139,25 @@ class MetricConverter:
 
             if self.value_transform:
                 exposition.append(
-                    f"{self.name}{{{label_exposition}}} {self.value_transform[value]}"
+                    f"{self.name}{{{label_exposition}}} {self.value_transform[value]}\n"
                 )
             elif self.to_unixtime:
                 try:
                     exposition.append(
-                        f"{self.name}{{{label_exposition}}} {float(datetime.strptime(value, self.to_unixtime).timestamp()) * 1000}"
+                        f"{self.name}{{{label_exposition}}} {self._convert_to_unixtime(value)}\n"
                     )
                 except (ValueError, TypeError):
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
             else:
                 try:
                     exposition.append(
-                        f"{self.name}{{{label_exposition}}} {float(value)}"
+                        f"{self.name}{{{label_exposition}}} {float(value)}\n"
                     )
                 except (ValueError, TypeError):
                     # value is not type change to float
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN")
+                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
 
-        return "\n".join(exposition) + "\n"
+        return "".join(exposition)
 
 
 class Exporter:
@@ -120,6 +178,13 @@ class Exporter:
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
         self.converters = {}
+        unixtime_regex: dict[str, re.Pattern] = {
+            "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
+            "wd_uptime": re.compile(r".*(\d+)w(\d+)d (\d\d):(\d\d):(\d\d).*"),
+            "d_uptime": re.compile(r".*(\d+)d (\d\d):(\d\d):(\d\d).*"),
+            "uptime": re.compile(r".*(\d\d):(\d\d):(\d\d).*"),
+        }
+
         for name, module in config.modules.items():
             converter = {}
             for table in module.tables:
@@ -128,6 +193,7 @@ class ExporterBuilder:
                         metric,
                         labels=config.optables[table].labels,
                         prefix=config.prefix,
+                        unixtime_regex=unixtime_regex,
                     )
                     for metric in config.optables[table].metrics
                 ]
