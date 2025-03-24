@@ -1,6 +1,6 @@
 [project]
 name = "junos-exporter"
-version = "0.0.4"
+version = "0.0.5"
 description = "Prometheus Exporter for Junos using PyEZ Tables and Views"
 authors = [
   {name = "minefuto", email = "minefuto@gmail.com"}
@@ -15,7 +15,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "uvicorn>=0.34.0",
 ]
-classifier = [
+classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
