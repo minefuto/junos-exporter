@@ -13,10 +13,11 @@ So, this exporter's metrics can be flexibly configured by simply editing yaml.
 ## Usage
 
 ```sh
-usage: junos-exporter [-h] [-p PORT] [-w WORKERS]
+usage: junos-exporter [-h] [-l LOG] [-p PORT] [-w WORKERS]
 
 options:
   -h, --help            show this help message and exit
+  -l LOG, --log LOG     logging level[default: info]
   -p PORT, --port PORT  listening port[default: 9326]
   -w WORKERS, --workers WORKERS
                         number of worker processes[default: 1]

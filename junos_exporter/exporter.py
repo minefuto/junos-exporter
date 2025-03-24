@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 
-from .config import Config, Label, Metric
+from .config import Config, Label, Metric, logger
 from .connector import Connector
 
 
@@ -81,24 +81,19 @@ class MetricConverter:
     def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
         for label in self.labels:
-            # label value missing
             if label.value not in item:
                 continue
 
-            # label value is None
             if item[label.value] is None:
                 continue
 
-            # label regex is not defined
             if not label.regex:
                 label_exposition.append(f'{label.name}="{item[label.value]}"')
                 continue
 
             match = label.regex.match(item[label.value])
-            # label regex is not hitting
             if match is None:
                 continue
-            # label regex is hitting
             else:
                 try:
                     label_exposition.append(f'{label.name}="{match.group(1)}"')
@@ -121,8 +116,10 @@ class MetricConverter:
                     )
                     continue
                 except (ValueError, TypeError):
-                    # value is not type change to float
                     exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
+                    logger.warning(
+                        f"Could not convert metric value(name: {self.name}, value(static): {self.value_name}, error: could not convert type to float)"
+                    )
                     continue
 
             value = item[self.value_name]
@@ -130,6 +127,9 @@ class MetricConverter:
                 match = self.regex.match(value)
                 if match is None:
                     exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
+                    logger.warning(
+                        f"Could not convert metric value(name: {self.name}, value({self.value_name}): {value}, regex: {self.regex}, error: could not match regex)"
+                    )
                     continue
                 else:
                     try:
@@ -148,15 +148,19 @@ class MetricConverter:
                     )
                 except (ValueError, TypeError):
                     exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
+                    logger.warning(
+                        f"Could not convert metric value(name: {self.name}, value({self.value_name}): {value}, error: could not convert to unixtime)"
+                    )
             else:
                 try:
                     exposition.append(
                         f"{self.name}{{{label_exposition}}} {float(value)}\n"
                     )
                 except (ValueError, TypeError):
-                    # value is not type change to float
                     exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
-
+                    logger.warning(
+                        f"Could not convert metric value(metric: {self.name}, value({self.value_name}): {value}, error: could not convert type to float)"
+                    )
         return "".join(exposition)
 
 
@@ -167,10 +171,13 @@ class Exporter:
     def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
         for name, metrics in self.converter.items():
-            exposition.append(
-                "\n".join(
-                    [metric.convert(connector.collect(name)) for metric in metrics]
-                )
+            items = connector.collect(name)
+            logger.debug(
+                f"Start to convert table items(target: {connector.host}), table: {name})"
+            )
+            exposition.append("\n".join([metric.convert(items) for metric in metrics]))
+            logger.debug(
+                f"Completed to convert table items(target: {connector.host}), table: {name})"
             )
         return "\n".join(exposition)
 
@@ -201,8 +208,9 @@ class ExporterBuilder:
 
     def build(self, module_name: str) -> Exporter:
         if module_name not in self.converters:
+            logger.error(f"Module is not defined(module: {module_name})")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"module({module_name}) is not defined",
+                detail=f"Module is not defined(module: {module_name})",
             )
         return Exporter(self.converters[module_name])

@@ -5,7 +5,7 @@ from glob import glob
 import yaml
 from fastapi import HTTPException, status
 from jnpr.junos import Device
-from jnpr.junos.exception import ConnectError, RpcError
+from jnpr.junos.exception import ConnectError
 from jnpr.junos.factory import loadyaml
 from jnpr.junos.factory.cmdtable import CMDTable
 from jnpr.junos.factory.optable import OpTable
@@ -49,7 +49,7 @@ from jnpr.junos.op.teddb import TedSummaryTable, TedTable
 from jnpr.junos.op.vlan import VlanTable
 from jnpr.junos.op.xcvr import XcvrTable
 
-from .config import Config, Credential
+from .config import Config, Credential, logger
 
 
 class Connector:
@@ -69,6 +69,7 @@ class Connector:
 
     def __enter__(self) -> "Connector":
         try:
+            logger.debug(f"Start to open netconf connection(target: {self.host})")
             if self.ssh_config is not None:
                 self.device = Device(
                     host=self.host,
@@ -82,17 +83,22 @@ class Connector:
                     user=self.username,
                     password=self.password,
                 ).open()
-        except ConnectError:
+            logger.debug(f"Completed to open netconf connection(target: {self.host})")
+        except ConnectError as err:
+            logger.error(
+                f"Could not open netconf connection(target: {self.host}, error: {err})"
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Cannot connect to {self.host}",
+                detail=f"Could not open netconf connection(target: {self.host}, error: {err})",
             )
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.device.close()
+        logger.debug(f"Closed netconf connection(target: {self.host})")
 
-    def collect(self, name: str) -> list[dict]:
+    def _get(self, name: str) -> CMDTable | OpTable | None:
         if issubclass(globals()[name], CMDTable):
             if self.textfsm_dir is None:
                 table = globals()[name](self.device)
@@ -104,12 +110,29 @@ class Connector:
             raise NotImplementedError
 
         try:
+            logger.debug(
+                f"Start to get table items(target: {self.host}, table: {name})"
+            )
             table.get()
-        except RpcError:
-            # cannot get rpc
-            return []
+            logger.debug(
+                f"Completed to get table items(target: {self.host}, table: {name})"
+            )
+            return table
         except AttributeError:
             # https://github.com/Juniper/py-junos-eznc/issues/1366
+            logger.debug(
+                f"Could not get table items(target: {self.host}, table: {name}, error: junos output is empty"
+            )
+            return None
+        except Exception as err:
+            logger.error(
+                f"Could not get table items(target: {self.host}, table: {name}, error: {err})"
+            )
+            return None
+
+    def collect(self, name: str) -> list[dict]:
+        table = self._get(name)
+        if table is None:
             return []
 
         items = []
@@ -152,25 +175,9 @@ class Connector:
         return items
 
     def debug(self, name: str) -> list[dict]:
-        if issubclass(globals()[name], CMDTable):
-            if self.textfsm_dir is None:
-                table = globals()[name](self.device)
-            else:
-                table = globals()[name](self.device, template_dir=self.textfsm_dir)
-        elif issubclass(globals()[name], OpTable):
-            table = globals()[name](self.device)
-        else:
-            raise NotImplementedError
-
-        try:
-            table.get()
-        except RpcError:
-            # cannot get rpc
+        table = self._get(name)
+        if table is None:
             return []
-        except AttributeError:
-            # https://github.com/Juniper/py-junos-eznc/issues/1366
-            return []
-
         return table.to_json()
 
 
@@ -203,9 +210,12 @@ class ConnecterBuilder:
 
     def build(self, host: str, credential_name: str) -> Connector:
         if credential_name not in self.credentials:
+            logger.error(
+                f"Could not build Connector(target: {host}, credential: {credential_name}, error: credential is not defined)"
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"credential({credential_name}) is not defined",
+                detail=f"Could not build Connector(target: {host}, credential: {credential_name}, error: credential is not defined)",
             )
         return Connector(
             host=host,

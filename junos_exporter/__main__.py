@@ -6,6 +6,13 @@ import uvicorn
 def cli() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "-l",
+        "--log",
+        type=str,
+        default="info",
+        help="logging level[default: info]",
+    )
+    parser.add_argument(
         "-p",
         "--port",
         type=int,
@@ -27,6 +34,7 @@ def cli() -> None:
         port=args.port,
         workers=args.workers,
         log_config="log_config.yml",
+        log_level=args.log,
     )
 
 

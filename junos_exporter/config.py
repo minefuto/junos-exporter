@@ -2,6 +2,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from logging import getLogger
 from typing import DefaultDict, Literal
 
 import yaml
@@ -13,6 +14,8 @@ from pydantic import (
     ValidationInfo,
     field_validator,
 )
+
+logger = getLogger("uvicorn.error")
 
 
 class General(BaseModel):
