@@ -76,7 +76,7 @@ class MetricConverter:
                 * 1000
             )
         else:
-            return float(0)
+            return 0.0
 
     def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
@@ -115,19 +115,21 @@ class MetricConverter:
                         f"{self.name}{{{label_exposition}}} {float(self.value_name)}\n"
                     )
                     continue
-                except (ValueError, TypeError):
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
-                    logger.warning(
-                        f"Could not convert metric value(name: {self.name}, value(static): {self.value_name}, error: could not convert type to float)"
+                except ValueError:
+                    logger.debug(
+                        f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value does not exist)"
                     )
                     continue
 
             value = item[self.value_name]
+            if value is None:
+                logger.debug(f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value is None)")
+                continue
+
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
-                    logger.warning(
+                    logger.debug(
                         f"Could not convert metric value(name: {self.name}, value({self.value_name}): {value}, regex: {self.regex}, error: could not match regex)"
                     )
                     continue
@@ -142,23 +144,17 @@ class MetricConverter:
                     f"{self.name}{{{label_exposition}}} {self.value_transform[value]}\n"
                 )
             elif self.to_unixtime:
-                try:
-                    exposition.append(
-                        f"{self.name}{{{label_exposition}}} {self._convert_to_unixtime(value)}\n"
-                    )
-                except (ValueError, TypeError):
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
-                    logger.warning(
-                        f"Could not convert metric value(name: {self.name}, value({self.value_name}): {value}, error: could not convert to unixtime)"
-                    )
+                exposition.append(
+                    f"{self.name}{{{label_exposition}}} {self._convert_to_unixtime(value)}\n"
+                )
             else:
                 try:
                     exposition.append(
                         f"{self.name}{{{label_exposition}}} {float(value)}\n"
                     )
-                except (ValueError, TypeError):
+                except ValueError:
                     exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
-                    logger.warning(
+                    logger.debug(
                         f"Could not convert metric value(metric: {self.name}, value({self.value_name}): {value}, error: could not convert type to float)"
                     )
         return "".join(exposition)
@@ -172,11 +168,11 @@ class Exporter:
         exposition: list[str] = []
         for name, metrics in self.converter.items():
             items = connector.collect(name)
-            logger.debug(
+            logger.info(
                 f"Start to convert table items(target: {connector.host}), table: {name})"
             )
             exposition.append("\n".join([metric.convert(items) for metric in metrics]))
-            logger.debug(
+            logger.info(
                 f"Completed to convert table items(target: {connector.host}), table: {name})"
             )
         return "\n".join(exposition)

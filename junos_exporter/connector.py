@@ -69,12 +69,13 @@ class Connector:
 
     def __enter__(self) -> "Connector":
         try:
-            logger.debug(f"Start to open netconf connection(target: {self.host})")
+            logger.info(f"Start to open netconf connection(target: {self.host})")
             if self.ssh_config is not None:
                 self.device = Device(
                     host=self.host,
                     user=self.username,
                     password=self.password,
+                    gather_fasts=False,
                     ssh_config=self.ssh_config,
                 ).open()
             else:
@@ -82,8 +83,9 @@ class Connector:
                     host=self.host,
                     user=self.username,
                     password=self.password,
+                    gather_fasts=False,
                 ).open()
-            logger.debug(f"Completed to open netconf connection(target: {self.host})")
+            logger.info(f"Completed to open netconf connection(target: {self.host})")
         except ConnectError as err:
             logger.error(
                 f"Could not open netconf connection(target: {self.host}, error: {err})"
@@ -95,8 +97,11 @@ class Connector:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        self.device.close()
-        logger.debug(f"Closed netconf connection(target: {self.host})")
+        try:
+            self.device.close()
+            logger.info(f"Closed netconf connection(target: {self.host})")
+        except Exception as err:
+            logger.error(f"Cannot close netconf connection(target: {self.host}, error: {err})")
 
     def _get(self, name: str) -> CMDTable | OpTable | None:
         if issubclass(globals()[name], CMDTable):
@@ -110,11 +115,11 @@ class Connector:
             raise NotImplementedError
 
         try:
-            logger.debug(
+            logger.info(
                 f"Start to get table items(target: {self.host}, table: {name})"
             )
             table.get()
-            logger.debug(
+            logger.info(
                 f"Completed to get table items(target: {self.host}, table: {name})"
             )
             return table
