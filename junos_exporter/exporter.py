@@ -1,6 +1,6 @@
 import re
-from time import time
 from datetime import datetime, timedelta
+from time import time
 
 from fastapi import HTTPException, status
 
@@ -124,7 +124,9 @@ class MetricConverter:
 
             value = item[self.value_name]
             if value is None:
-                logger.debug(f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value is None)")
+                logger.debug(
+                    f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value is None)"
+                )
                 continue
 
             if self.regex is not None:
@@ -162,7 +164,9 @@ class MetricConverter:
 
 
 class Exporter:
-    def __init__(self, converter: dict[str, list[MetricConverter]], timeout: int) -> None:
+    def __init__(
+        self, converter: dict[str, list[MetricConverter]], timeout: int
+    ) -> None:
         self.converter = converter
         self.timeout = timeout
 

@@ -140,7 +140,7 @@ class Config:
         return self.general.prefix
 
     @property
-    def timeout(self) -> str:
+    def timeout(self) -> int:
         return self.general.timeout
 
     @property

@@ -101,7 +101,9 @@ class Connector:
             self.device.close()
             logger.info(f"Closed netconf connection(target: {self.host})")
         except Exception as err:
-            logger.error(f"Cannot close netconf connection(target: {self.host}, error: {err})")
+            logger.error(
+                f"Cannot close netconf connection(target: {self.host}, error: {err})"
+            )
 
     def _get(self, name: str) -> CMDTable | OpTable | None:
         if issubclass(globals()[name], CMDTable):
@@ -115,9 +117,7 @@ class Connector:
             raise NotImplementedError
 
         try:
-            logger.info(
-                f"Start to get table items(target: {self.host}, table: {name})"
-            )
+            logger.info(f"Start to get table items(target: {self.host}, table: {name})")
             table.get()
             logger.info(
                 f"Completed to get table items(target: {self.host}, table: {name})"
