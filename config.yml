@@ -1,5 +1,6 @@
 general:
   prefix: junos
+  timeout: 60
 
 credentials:
   vjunos:

@@ -1,4 +1,5 @@
 import re
+from time import time
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
@@ -161,12 +162,20 @@ class MetricConverter:
 
 
 class Exporter:
-    def __init__(self, converter: dict[str, list[MetricConverter]]) -> None:
+    def __init__(self, converter: dict[str, list[MetricConverter]], timeout: int) -> None:
         self.converter = converter
+        self.timeout = timeout
 
     def collect(self, connector: Connector) -> str:
+        start_time = time()
         exposition: list[str] = []
         for name, metrics in self.converter.items():
+            if time() - start_time > self.timeout:
+                logger.error(f"Server timeout(target: {connector.host})")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Server timeout(target: {connector.host})",
+                )
             items = connector.collect(name)
             logger.info(
                 f"Start to convert table items(target: {connector.host}), table: {name})"
@@ -181,6 +190,7 @@ class Exporter:
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
         self.converters = {}
+        self.timeout = config.timeout
         unixtime_regex: dict[str, re.Pattern] = {
             "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
             "wd_uptime": re.compile(r".*(\d+)w(\d+)d (\d\d):(\d\d):(\d\d).*"),
@@ -209,4 +219,4 @@ class ExporterBuilder:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Module is not defined(module: {module_name})",
             )
-        return Exporter(self.converters[module_name])
+        return Exporter(self.converters[module_name], self.timeout)
