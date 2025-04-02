@@ -1,6 +1,5 @@
 import re
 from datetime import datetime, timedelta
-from time import time
 
 from fastapi import HTTPException, status
 
@@ -15,7 +14,7 @@ class MetricConverter:
         labels: list[Label],
         prefix: str,
         unixtime_regex: dict[str, re.Pattern],
-    ):
+    ) -> None:
         if metric.type_ == "counter":
             self.name = f"{prefix}_{metric.name}_total"
         else:
@@ -117,23 +116,25 @@ class MetricConverter:
                     )
                     continue
                 except ValueError:
+                    if self.value_name in ["NaN", "-Inf", "Inf"]:
+                        exposition.append(
+                            f"{self.name}{{{label_exposition}}} {self.value_name}\n"
+                        )
+                        continue
                     logger.debug(
-                        f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value does not exist)"
+                        f"Could not convert metric value(Name: {self.name}, Value: {self.value_name}, Error: value does not exist)"
                     )
                     continue
 
             value = item[self.value_name]
             if value is None:
-                logger.debug(
-                    f"Could not convert metric value(name: {self.name}, value: {self.value_name}, error: value is None)"
-                )
                 continue
 
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
                     logger.debug(
-                        f"Could not convert metric value(name: {self.name}, value({self.value_name}): {value}, regex: {self.regex}, error: could not match regex)"
+                        f"Could not convert metric value(Name: {self.name}, Value({self.value_name}): {value}, Regex: {self.regex}, Error: could not match regex)"
                     )
                     continue
                 else:
@@ -156,37 +157,31 @@ class MetricConverter:
                         f"{self.name}{{{label_exposition}}} {float(value)}\n"
                     )
                 except ValueError:
-                    exposition.append(f"{self.name}{{{label_exposition}}} NaN\n")
+                    if value in ["NaN", "-Inf", "Inf"]:
+                        exposition.append(
+                            f"{self.name}{{{label_exposition}}} {value}\n"
+                        )
+                        continue
                     logger.debug(
-                        f"Could not convert metric value(metric: {self.name}, value({self.value_name}): {value}, error: could not convert type to float)"
+                        f"Could not convert metric value(Metric: {self.name}, Value({self.value_name}): {value}, Error: could not convert type to float)"
                     )
         return "".join(exposition)
 
 
 class Exporter:
-    def __init__(
-        self, converter: dict[str, list[MetricConverter]], timeout: int
-    ) -> None:
+    def __init__(self, converter: dict[str, list[MetricConverter]]) -> None:
         self.converter = converter
-        self.timeout = timeout
 
-    def collect(self, connector: Connector) -> str:
-        start_time = time()
+    async def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
         for name, metrics in self.converter.items():
-            if time() - start_time > self.timeout:
-                logger.error(f"Server timeout(target: {connector.host})")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Server timeout(target: {connector.host})",
-                )
-            items = connector.collect(name)
-            logger.info(
-                f"Start to convert table items(target: {connector.host}), table: {name})"
+            items = await connector.collect(name)
+            logger.debug(
+                f"Start to convert table items(Target: {connector.host}), Table: {name})"
             )
             exposition.append("\n".join([metric.convert(items) for metric in metrics]))
-            logger.info(
-                f"Completed to convert table items(target: {connector.host}), table: {name})"
+            logger.debug(
+                f"Completed to convert table items(Target: {connector.host}), Table: {name})"
             )
         return "\n".join(exposition)
 
@@ -194,7 +189,6 @@ class Exporter:
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
         self.converters = {}
-        self.timeout = config.timeout
         unixtime_regex: dict[str, re.Pattern] = {
             "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
             "wd_uptime": re.compile(r".*(\d+)w(\d+)d (\d\d):(\d\d):(\d\d).*"),
@@ -218,9 +212,9 @@ class ExporterBuilder:
 
     def build(self, module_name: str) -> Exporter:
         if module_name not in self.converters:
-            logger.error(f"Module is not defined(module: {module_name})")
+            logger.error(f"Module is not defined(Module: {module_name})")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Module is not defined(module: {module_name})",
+                detail=f"Module is not defined(Module: {module_name})",
             )
-        return Exporter(self.converters[module_name], self.timeout)
+        return Exporter(self.converters[module_name])

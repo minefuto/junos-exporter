@@ -9,10 +9,12 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10, <3.13"
 dependencies = [
+    "asyncssh>=2.20.0",
     "fastapi>=0.115.8",
     "junos-eznc>=2.7.2",
     "ntc-templates>=7.7.0",
     "pyyaml>=6.0.2",
+    "scrapli-netconf>=2025.1.30",
     "uvicorn>=0.34.0",
 ]
 classifiers = [

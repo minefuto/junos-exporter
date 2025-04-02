@@ -27,6 +27,19 @@ wheels = [
 ]
 
 [[package]]
+name = "asyncssh"
+version = "2.20.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/f5/365489721f98bb1cd5e3d48f397598e1be5b2695301e2d685b64cfdab51d/asyncssh-2.20.0.tar.gz", hash = "sha256:020b6e384b2328ef8683908ad8e73de9ec2b9b62fd964571ea957bba98412983", size = 534719 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/c5/7a9d42c065f272f74792663194966a68810e851a34c0dd080246bd7308f5/asyncssh-2.20.0-py3-none-any.whl", hash = "sha256:af6888d937c07a4bf31293335a6166b4d87608cdb5957b49547da6ad87ecf174", size = 373109 },
+]
+
+[[package]]
 name = "bcrypt"
 version = "4.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -233,10 +246,12 @@ name = "junos-exporter"
 version = "0.0.6"
 source = { editable = "." }
 dependencies = [
+    { name = "asyncssh" },
     { name = "fastapi" },
     { name = "junos-eznc" },
     { name = "ntc-templates" },
     { name = "pyyaml" },
+    { name = "scrapli-netconf" },
     { name = "uvicorn" },
 ]
 
@@ -249,10 +264,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "asyncssh", specifier = ">=2.20.0" },
     { name = "fastapi", specifier = ">=0.115.8" },
     { name = "junos-eznc", specifier = ">=2.7.2" },
     { name = "ntc-templates", specifier = ">=7.7.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "scrapli-netconf", specifier = ">=2025.1.30" },
     { name = "uvicorn", specifier = ">=0.34.0" },
 ]
 
@@ -659,6 +676,28 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d6/1c/d213e1c6651d0bd37636b21b1ba9b895f276e8057f882c9f944931e4f002/scp-0.15.0.tar.gz", hash = "sha256:f1b22e9932123ccf17eebf19e0953c6e9148f589f93d91b872941a696305c83f", size = 13905 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/79/b3/561cd6afa959e9dd522af12acc4f803e8bab1bd0e383bffc5211721c5fcb/scp-0.15.0-py2.py3-none-any.whl", hash = "sha256:9e7f721e5ac563c33eb0831d0f949c6342f1c28c3bdc3b02f39d77b5ea20df7e", size = 8753 },
+]
+
+[[package]]
+name = "scrapli"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/b0/72fd21e1abdfc0e36f07c56c7aad339bf554771784464980d70249fe0f64/scrapli-2025.1.30.tar.gz", hash = "sha256:3426a38b5dd6a4c67749c30f14102c04a4a43d3da17710b46fec7e53409b340e", size = 104403 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/2d/b7dc63b1ff7d60908843fcee2a8897735a06f18d04654baf83f95a4b1a2f/scrapli-2025.1.30-py3-none-any.whl", hash = "sha256:f71ca4e96b56ad245f34269dc3eedf168aca54eb7b1ba96ad0c965c2b76f807e", size = 145741 },
+]
+
+[[package]]
+name = "scrapli-netconf"
+version = "2025.1.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "scrapli" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/7a/11f5881ae1aa8fe3f102d3c6e6a16e4b3db7c2b9c9558422227f9a2131d4/scrapli_netconf-2025.1.30.tar.gz", hash = "sha256:06813455dda9bd27d99734a3f689b4259ccab625141fc41126495ccad705d248", size = 30362 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/a9/3d722619901cca8ba5cbe0a66ed024292d17e155da3b26260abe227fcbe3/scrapli_netconf-2025.1.30-py3-none-any.whl", hash = "sha256:009041515d9d75d6e3748730bc920b350eb6ab86c6890e44495ca00de3e86cd9", size = 37133 },
 ]
 
 [[package]]
