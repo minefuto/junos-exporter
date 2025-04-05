@@ -4,11 +4,11 @@ from glob import glob
 
 import yaml
 from fastapi import HTTPException, status
-from jnpr.junos import Device
-from jnpr.junos.exception import ConnectError
 from jnpr.junos.factory import loadyaml
 from jnpr.junos.factory.cmdtable import CMDTable
 from jnpr.junos.factory.optable import OpTable
+from jnpr.junos.factory.state_machine import StateMachine
+from jnpr.junos.jxml import remove_namespaces_and_spaces
 
 # predefined table
 from jnpr.junos.op.arp import ArpTable
@@ -48,8 +48,21 @@ from jnpr.junos.op.taskmemory import TaskMemoryTable
 from jnpr.junos.op.teddb import TedSummaryTable, TedTable
 from jnpr.junos.op.vlan import VlanTable
 from jnpr.junos.op.xcvr import XcvrTable
+from lxml import etree
+from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliTimeout
+from scrapli_netconf import AsyncNetconfDriver
+
+from textfsm.parser import TextFSMTemplateError
 
 from .config import Config, Credential, logger
+
+
+class RpcError(Exception):
+    def __init__(self, err: str) -> None:
+        self.err = err
+
+    def __str__(self) -> str:
+        return f"{self.err}"
 
 
 class Connector:
@@ -60,103 +73,136 @@ class Connector:
         textfsm_dir: str | None,
         ssh_config: str | None,
     ) -> None:
-        self.device: Device = None
         self.host: str = host
-        self.username: str = credential.username
-        self.password: str = credential.password
+        self.conn: AsyncNetconfDriver = AsyncNetconfDriver(
+            host=self.host,
+            auth_username=credential.username,
+            auth_password=credential.password,
+            auth_strict_key=False,
+            ssh_config_file=True if ssh_config is None else ssh_config,
+            transport="asyncssh",
+        )
         self.textfsm_dir: str | None = textfsm_dir
-        self.ssh_config: str | None = ssh_config
 
-    def __enter__(self) -> "Connector":
+    async def __aenter__(self) -> "Connector":
         try:
-            logger.info(f"Start to open netconf connection(target: {self.host})")
-            if self.ssh_config is not None:
-                self.device = Device(
-                    host=self.host,
-                    user=self.username,
-                    password=self.password,
-                    gather_fasts=False,
-                    ssh_config=self.ssh_config,
-                ).open()
-            else:
-                self.device = Device(
-                    host=self.host,
-                    user=self.username,
-                    password=self.password,
-                    gather_fasts=False,
-                ).open()
-            logger.info(f"Completed to open netconf connection(target: {self.host})")
-        except ConnectError as err:
+            logger.debug(f"Start to open netconf connection(Target: {self.host})")
+            await self.conn.open()
+            logger.debug(f"Completed to open netconf connection(Target: {self.host})")
+        except Exception as err:
             logger.error(
-                f"Could not open netconf connection(target: {self.host}, error: {err})"
+                f"Could not open netconf connection(Target: {self.host}, Error: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(target: {self.host}, error: {err})",
+                detail=f"Could not open netconf connection(Target: {self.host}, Error: {err})",
             )
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         try:
-            self.device.close()
-            logger.info(f"Closed netconf connection(target: {self.host})")
+            await self.conn.close()
+            logger.debug(f"Closed netconf connection(Target: {self.host})")
+        except ScrapliAuthenticationFailed as err:
+            logger.error(
+                f"Cannot close netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})"
+            )
+        except ScrapliTimeout as err:
+            logger.error(
+                f"Cannot close netconf connection(Target: {self.host}, ScrapliTimeout: {err})"
+            )
         except Exception as err:
             logger.error(
-                f"Cannot close netconf connection(target: {self.host}, error: {err})"
+                f"Cannot close netconf connection(Target: {self.host}, Error: {err})"
             )
 
-    def _get(self, name: str) -> CMDTable | OpTable | None:
-        if issubclass(globals()[name], CMDTable):
+    async def _get_rpc(self, filter_: str) -> etree._Element:
+        rpc = await self.conn.rpc(filter_=filter_)
+        xml = rpc.xml_result
+        if re.match(r"\{.*\}rpc-reply$", xml.tag):
+            if not re.match(r"\{.*\}rpc-error$", xml[0].tag):
+                print(type(xml))
+                print(type(xml[0]))
+                return xml[0]
+        if err := xml.find(
+            ".//{urn:ietf:params:xml:ns:netconf:base:1.0}error-message"
+        ).text:
+            raise RpcError(err)
+        else:
+            raise RpcError("unknown rpc error")
+
+    async def _get(self, name: str) -> OpTable | CMDTable | None:
+        if issubclass(globals()[name], OpTable):
+            table = globals()[name]()
+
+            xml_rpc = etree.Element(table.GET_RPC, format="xml-minified")
+            for k, v in table.GET_ARGS.items():
+                if v is True:
+                    etree.SubElement(xml_rpc, k)
+                else:
+                    etree.SubElement(xml_rpc, k.replace("_", "-")).text = v
+            filter_ = etree.tostring(xml_rpc).decode()
+            try:
+                rpc = await self._get_rpc(filter_)
+                table.xml = remove_namespaces_and_spaces(rpc)
+                return table
+            except RpcError as err:
+                logger.error(
+                    f"Could not get table items(Target: {self.host}, Table: {name}, RpcError: {err})"
+                )
+                return None
+
+        elif issubclass(globals()[name], CMDTable):
             if self.textfsm_dir is None:
-                table = globals()[name](self.device)
+                table = globals()[name]()
             else:
-                table = globals()[name](self.device, template_dir=self.textfsm_dir)
-        elif issubclass(globals()[name], OpTable):
-            table = globals()[name](self.device)
+                table = globals()[name](template_dir=self.textfsm_dir)
+
+            filter_ = (
+                f'<command format="text">{table.GET_CMD} | display xml rpc</command>'
+            )
+            try:
+                command = await self._get_rpc(filter_)
+                command[0].set("format", "text")
+                rpc_command = etree.tostring(command[0]).decode()
+
+                rpc = await self._get_rpc(rpc_command)
+                table.data = rpc.text
+                if table.USE_TEXTFSM:
+                    table.output = table._parse_textfsm(
+                        platform=table.PLATFORM, command=table.GET_CMD, raw=rpc.text
+                    )
+                else:
+                    sm = StateMachine(table)
+                    table.output = sm.parse(rpc.text.splitlines())
+                return table
+            except TextFSMTemplateError as err:
+                logger.error(
+                    f"Could not get table items(Target: {self.host}, Table: {name}, TextFSMTemplateError: {err})"
+                )
+                return None
+            except Exception as err:
+                logger.error(
+                    f"Could not get table items(Target: {self.host}, Table: {name}, Error: {err})"
+                )
+                return None
         else:
             raise NotImplementedError
 
-        try:
-            logger.info(f"Start to get table items(target: {self.host}, table: {name})")
-            table.get()
-            logger.info(
-                f"Completed to get table items(target: {self.host}, table: {name})"
-            )
-            return table
-        except AttributeError:
-            # https://github.com/Juniper/py-junos-eznc/issues/1366
-            logger.debug(
-                f"Could not get table items(target: {self.host}, table: {name}, error: junos output is empty"
-            )
-            return None
-        except Exception as err:
-            logger.error(
-                f"Could not get table items(target: {self.host}, table: {name}, error: {err})"
-            )
-            return None
-
-    def collect(self, name: str) -> list[dict]:
-        table = self._get(name)
+    async def collect(self, name: str) -> list[dict]:
+        logger.debug(f"Start to get table items(Target: {self.host}, Table: {name})")
+        table = await self._get(name)
         if table is None:
+            logger.debug(
+                f"Could not get table items(Target: {self.host}, Table: {name}, Error: table is None)"
+            )
             return []
+        logger.debug(
+            f"Completed to get table items(Target: {self.host}, Table: {name})"
+        )
 
         items = []
-        if isinstance(table, CMDTable):
-            for t in table:
-                key, table = t
-                item = {}
-                if type(key) is tuple:
-                    for i, n in enumerate(key):
-                        item[f"key.{i}"] = n
-                        item[f"name.{i}"] = n
-                else:
-                    item["key"] = key
-                    item["name"] = key
-
-                for k, v in table.items():
-                    item[k] = v
-                items.append(item)
-        elif isinstance(table, OpTable):
+        if isinstance(table, OpTable):
             for t in table:
                 item = {}
                 try:
@@ -174,13 +220,28 @@ class Connector:
                 for k, v in t.items():
                     item[k] = v
                 items.append(item)
+        elif isinstance(table, CMDTable):
+            for t in table:
+                key, table = t
+                item = {}
+                if type(key) is tuple:
+                    for i, n in enumerate(key):
+                        item[f"key.{i}"] = n
+                        item[f"name.{i}"] = n
+                else:
+                    item["key"] = key
+                    item["name"] = key
+
+                for k, v in table.items():
+                    item[k] = v
+                items.append(item)
         else:
             raise NotImplementedError
 
         return items
 
-    def debug(self, name: str) -> list[dict]:
-        table = self._get(name)
+    async def debug(self, name: str) -> list[dict]:
+        table = await self._get(name)
         if table is None:
             return []
         return table.to_json()
@@ -216,11 +277,11 @@ class ConnecterBuilder:
     def build(self, host: str, credential_name: str) -> Connector:
         if credential_name not in self.credentials:
             logger.error(
-                f"Could not build Connector(target: {host}, credential: {credential_name}, error: credential is not defined)"
+                f"Could not build Connector(Target: {host}, Credential: {credential_name}, Error: credential is not defined)"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not build Connector(target: {host}, credential: {credential_name}, error: credential is not defined)",
+                detail=f"Could not build Connector(Target: {host}, Credential: {credential_name}, Error: credential is not defined)",
             )
         return Connector(
             host=host,
