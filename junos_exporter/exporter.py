@@ -116,7 +116,7 @@ class MetricConverter:
                     )
                     continue
                 except ValueError:
-                    if self.value_name in ["NaN", "-Inf", "Inf"]:
+                    if self.value_name in ["NaN", "-Inf", "+Inf"]:
                         exposition.append(
                             f"{self.name}{{{label_exposition}}} {self.value_name}\n"
                         )
@@ -157,7 +157,7 @@ class MetricConverter:
                         f"{self.name}{{{label_exposition}}} {float(value)}\n"
                     )
                 except ValueError:
-                    if value in ["NaN", "-Inf", "Inf"]:
+                    if value in ["NaN", "-Inf", "+Inf"]:
                         exposition.append(
                             f"{self.name}{{{label_exposition}}} {value}\n"
                         )
