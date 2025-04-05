@@ -15,14 +15,18 @@ So, this exporter's metrics can be flexibly configured by simply editing yaml.
 ## Usage
 
 ```sh
-usage: junos-exporter [-h] [-l LOG] [-p PORT] [-w WORKERS]
+usage: junos-exporter [-h] [--log-level {critical,error,warning,info,debug,trace}] [--no-access-log] [--port PORT] [--root-path ROOT_PATH]
+                      [--workers WORKERS]
 
 options:
   -h, --help            show this help message and exit
-  -l LOG, --log LOG     logging level[default: info]
-  -p PORT, --port PORT  listening port[default: 9326]
-  -w WORKERS, --workers WORKERS
-                        number of worker processes[default: 1]
+  --log-level {critical,error,warning,info,debug,trace}
+                        log level[default: info]
+  --no-access-log       disable access log
+  --port PORT           listening port[default: 9326]
+  --root-path ROOT_PATH
+                        root path[default: ""]
+  --workers WORKERS     number of worker processes[default: 1]
 ```
 
 ### Docker
