@@ -121,8 +121,6 @@ class Connector:
         xml = rpc.xml_result
         if re.match(r"\{.*\}rpc-reply$", xml.tag):
             if not re.match(r"\{.*\}rpc-error$", xml[0].tag):
-                print(type(xml))
-                print(type(xml[0]))
                 return xml[0]
         if err := xml.find(
             ".//{urn:ietf:params:xml:ns:netconf:base:1.0}error-message"

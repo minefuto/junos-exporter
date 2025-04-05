@@ -13,6 +13,7 @@ from pydantic import (
     ValidationError,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
 
 logger = getLogger("uvicorn.error")
@@ -54,7 +55,7 @@ class Module(BaseModel):
 class Label(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
-    name: str
+    name: str = ""
     value: str
     regex: re.Pattern | None = None
 
@@ -64,6 +65,12 @@ class Label(BaseModel):
         if not isinstance(regex, str):
             raise ValueError(f"regex({regex}) is not a str")
         return re.compile(regex)
+
+    @model_validator(mode="after")
+    def add_name(self) -> "Label":
+        if self.name == "":
+            self.name = self.value
+        return self
 
 
 class Metric(BaseModel):
