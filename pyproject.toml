@@ -43,36 +43,3 @@ dev = [
 
 [tool.mypy]
 ignore_missing_imports = true
-
-[tool.ruff.lint.pyflakes]
-allowed-unused-imports = [
-    "jnpr.junos.op.arp",
-    "jnpr.junos.op.bfd",
-    "jnpr.junos.op.bgp",
-    "jnpr.junos.op.ccc",
-    "jnpr.junos.op.ddos",
-    "jnpr.junos.op.elsethernetswitchingtable",
-    "jnpr.junos.op.ethernetswitchingtable",
-    "jnpr.junos.op.ethport",
-    "jnpr.junos.op.fpc",
-    "jnpr.junos.op.idpattacks",
-    "jnpr.junos.op.intopticdiag",
-    "jnpr.junos.op.inventory",
-    "jnpr.junos.op.isis",
-    "jnpr.junos.op.l2circuit",
-    "jnpr.junos.op.lacp",
-    "jnpr.junos.op.ldp",
-    "jnpr.junos.op.lldp",
-    "jnpr.junos.op.nd",
-    "jnpr.junos.op.ospf",
-    "jnpr.junos.op.pfestats",
-    "jnpr.junos.op.phyport",
-    "jnpr.junos.op.ppm",
-    "jnpr.junos.op.routes",
-    "jnpr.junos.op.securityzone",
-    "jnpr.junos.op.systemstorage",
-    "jnpr.junos.op.taskmemory",
-    "jnpr.junos.op.teddb",
-    "jnpr.junos.op.vlan",
-    "jnpr.junos.op.xcvr",
-]

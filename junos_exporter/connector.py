@@ -9,45 +9,6 @@ from jnpr.junos.factory.cmdtable import CMDTable
 from jnpr.junos.factory.optable import OpTable
 from jnpr.junos.factory.state_machine import StateMachine
 from jnpr.junos.jxml import remove_namespaces_and_spaces
-
-# predefined table
-from jnpr.junos.op.arp import ArpTable
-from jnpr.junos.op.bfd import BfdSessionTable
-from jnpr.junos.op.bgp import bgpTable
-from jnpr.junos.op.ccc import CCCTable
-from jnpr.junos.op.ddos import DDOSTable
-from jnpr.junos.op.elsethernetswitchingtable import ElsEthernetSwitchingTable
-from jnpr.junos.op.ethernetswitchingtable import EthernetSwitchingTable
-from jnpr.junos.op.ethport import EthPortTable
-from jnpr.junos.op.fpc import FpcHwTable, FpcInfoTable, FpcMiReHwTable, FpcMiReInfoTable
-from jnpr.junos.op.idpattacks import IDPAttackTable
-from jnpr.junos.op.intopticdiag import PhyPortDiagTable
-from jnpr.junos.op.inventory import ModuleTable
-from jnpr.junos.op.isis import IsisAdjacencyTable
-from jnpr.junos.op.l2circuit import L2CircuitConnectionTable
-from jnpr.junos.op.lacp import LacpPortTable
-from jnpr.junos.op.ldp import LdpNeighborTable
-from jnpr.junos.op.lldp import LLDPNeighborTable
-from jnpr.junos.op.nd import NdTable
-from jnpr.junos.op.ospf import (
-    OspfInterfaceTable,
-    OSPFIOStatsTable,
-    OspfNeighborTable,
-    OspfRoutesTable,
-    OSPFStatsTable,
-    ospfTable,
-)
-from jnpr.junos.op.pfestats import PFEStatsTrafficTable
-from jnpr.junos.op.phyport import PhyPortErrorTable, PhyPortStatsTable, PhyPortTable
-from jnpr.junos.op.ppm import PPMTable
-from jnpr.junos.op.routes import RouteSummaryTable, RouteTable
-from jnpr.junos.op.securityzone import SecurityZoneTable
-
-# from jnpr.junos.op.systemstorage import SystemStorageTable
-from jnpr.junos.op.taskmemory import TaskMemoryTable
-from jnpr.junos.op.teddb import TedSummaryTable, TedTable
-from jnpr.junos.op.vlan import VlanTable
-from jnpr.junos.op.xcvr import XcvrTable
 from lxml import etree
 from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliTimeout
 from scrapli_netconf import AsyncNetconfDriver

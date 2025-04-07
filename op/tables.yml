@@ -1,30 +1,336 @@
 ---
-EthPortTable:
+SystemAlarmStatus:
+  rpc: get-system-alarm-information
+  item: alarm-detail
+  key: alarm-description
+  view: AlarmStatusView
+
+ChassisAlarmStatus:
+  rpc: get-alarm-information
+  item: alarm-detail
+  key: alarm-description
+  view: AlarmStatusView
+
+AlarmStatusView:
+  fields:
+    time: alarm-time
+    class: alarm-class
+    description: alarm-description
+    short_description: alarm-short-description
+    type: alarm-type
+
+FpcStatus:
+    rpc: get-fpc-information
+    item: .//fpc
+    key: slot
+    view: FpcStatusView
+
+FpcStatusView:
+    fields:
+        state: state
+        cpu_total: cpu-total
+        memory_heap_utilization: memory-heap-utilization
+        memory_buffer_utilization: memory-buffer-utilization
+
+HardwareStatus:
+  rpc: get-chassis-inventory
+  item: .//chassis|.//chassis-module|.//chassis-sub-module|.//chassis-sub-sub-module|.//chassis-sub-sub-sub-module
+  key: name
+  view: HardwareStatusView
+
+HardwareStatusView:
+  fields:
+    serial_number: serial-number
+    part_number: part-number
+    description: description
+
+EnvironmentStatus:
+  rpc: get-environment-information
+  item: environement-item
+  key: name
+  view: EnvironmentStatusView
+
+EnvironmentStatusView:
+  fields:
+    status: status
+
+RoutingEngineStatus:
+  rpc: get-route-engine-information
+  item: route-engine
+  key: slot
+  view: RoutingEngineStatusView
+
+RoutingEngineStatusView:
+  fields:
+    mastership_state: mastership-state
+    status: status
+    memory_buffer_utilization: memory-buffer-utilization
+    cpu_user: cpu-user
+    cpu_background: cpu-background
+    cpu_system: cpu-system
+    cpu_interrupt: cpu-interrupt
+    cpu_idle: cpu-idle
+    start_time: start-time
+
+StorageStatus:
+  rpc: get-system-storage
+  item: filesystem
+  key: filesystem-name
+  view: StorageStatusView
+
+StorageStatusView:
+  fields:
+    used_percent: used-percent
+    mounted_on: mounted-on
+
+PhysicalInterfaceStatus:
   rpc: get-interface-information
   args:
-    media: True
+    extensive: True
     interface_name: '[afgxe][et]-*'
+  key: name
+  item: physical-interface
+  view: PhysicalInterfaceStatusView
+
+PhysicalInterfaceStatusView:
+  groups:
+    traffic_statistics: traffic-statistics
+    input_error_list: input-error-list
+    output_error_list: output-error-list
+    ethernet_pcs_statistics: ethernet-pcs-statistics
+  fields:
+    oper_status: oper-status
+    admin_status: admin-status
+    description: description
+    speed: speed
+    mtu: mtu
+    link_mode: link-mode
+    interface_flapped: interface-flapped
+  fields_traffic_statistics:
+    input_bytes: input-bytes
+    input_packets: input-packets
+    output_bytes: output-bytes
+    output_packets: output-packets
+  fields_input_error_list:
+    input_errors: input-errors
+    input_drops: input-drops
+    framing_errors: framing-errors
+    input_runts: input-runts
+    input_discards: input-discards
+    input_l3_incompletes: input-l3-incompletes
+    input_l2_channel_errors: input-l2-channel-errors
+    input_l2_mismatch_timeouts: input-l2-mismatch-timeouts
+    input_fifo_errors: input-fifo-errors
+    input_resource_errors: input-resource-errors
+  fields_output_error_list:
+    carrier_transitions: carrier-transitions
+    output_errors: output-errors
+    output_drops: output-drops
+    collisions: output-collisions
+    aged_packets: aged-packets
+    mtu_errors: mtu-errors
+    hs_link_crc_errors: hs-link-crc-errors
+    output_fifo_errors: output-fifo-errors
+    output_resource_errors: output-resource-errors
+  fields_ethernet_pcs_statistics:
+    bit_error_seconds: bit-error-seconds
+    errored_blocks_seconds: errored-blocks-seconds
+
+LogicalInterfaceStatus:
+  rpc: get-interface-information
+  args:
+    detail: True
+    interface_name: '[afgxe][et]-*'
+  key: name
+  item: physical-interface/logical-interface
+  view: LogicalInterfaceStatusView
+
+LogicalInterfaceStatusView:
+  groups:
+    traffic_statistics: traffic-statistics
+    if_config_flags: if-config-flags
+  fields:
+    description: description
+  fields_traffic_statistics:
+    input_bytes: input-bytes
+    input_packets: input-packets
+    output_bytes: output-bytes
+    output_packets: output-packets
+  fields_if_config_flags:
+    iff_up: { iff-up: flag }
+    iff_down: { iff-down: flag }
+
+InterfaceOpticStatus:
+  rpc: get-interface-optics-diagnostics-information
+  args:
+    interface_name: '[efgx][et]-*'
   args_key: interface_name
   item: physical-interface
-  view: EthPortView
+  view: InterfaceOpticStatusView
 
-EthPortView:
+InterfaceOpticStatusView:
   groups:
-    mac_stats: ethernet-mac-statistics
-    flags: if-device-flags
+    diag: optics-diagnostics
+  fields_diag:
+    rx_optic_power : rx-signal-avg-optical-power-dbm
+    tx_optic_power : laser-output-power-dbm
+
+LldpStatus:
+  rpc: get-lldp-neighbors-information
+  item: lldp-neighbor-information
+  key:
+    - lldp-local-port-id
+    - lldp-remote-port-id
+  view: LldpStatusView
+
+LldpStatusView:
   fields:
-    oper: oper-status
-    admin: admin-status
+    remote_system_name: lldp-remote-system-name
+
+LacpStatus:
+  rpc: get-lacp-interface-information
+  item: lacp-interface-information/lag-lacp-protocol
+  key: name
+  view: LacpStatusView
+
+LacpStatusView:
+  fields:
+    receive_state: lacp-receive-state
+    transmit_state: lacp-transmit-state
+    mux_state: lacp-mux-state
+
+RouteStatus:
+  rpc: get-route-summary-information
+  item: route-table/protocols
+  key:
+    - ../table-name
+    - protocol-name
+  view: RouteStatusView
+
+RouteStatusView:
+  fields:
+    protocol_route_count: protocol-route-count
+    active_route_count: active-route-count
+
+ArpStatus:
+  rpc: get-arp-table-information
+  args:
+    expiration-time: True
+  item: arp-table-entry
+  key:
+    - mac-address
+    - interface-name
+  view: ArpStatusView
+
+ArpStatusView:
+  fields:
+    ip_address: ip-address
+    time_to_expire: time-to-expire
+
+OspfInterfaceStatus:
+  rpc: get-ospf-interface-information
+  args:
+    detail: True
+  item: ospf-interface
+  key: interface-name
+  view: OspfInterfaceStatusView
+
+OspfInterfaceStatusView:
+  fields:
+    interface_name: interface-name
+    interface_cost: interface-cost
+    interface_state: ospf-interface-state
+    area: ospf-area
+
+OspfNeighborStatus:
+  rpc: get-ospf-neighbor-information
+  args:
+    extensive: True
+  item: ospf-neighbor
+  key:
+    - interface-name
+    - neighbor-id
+  view: OspfNeighborStatusView
+
+OspfNeighborStatusView:
+  fields:
+    neighbor_address: neighbor-address
+    interface_name: interface-name
+    neighbor_state: ospf-neighbor-state
+    neighbor_up_time: neighbor-up-time
+    area: ospf-area
+
+BgpStatus:
+  rpc: get-bgp-summary-information
+  item: bgp-peer
+  key: peer-address
+  view: BgpStatusView
+
+BgpStatusView:
+  fields:
+    peer_as: peer-as
+    peer_address: peer-address
+    peer_type: peer-type
+    peer_state: peer-state
     description: description
-    mtu: { mtu : int }
-    link_mode: link-mode
-    macaddr: current-physical-address
-    interface_flapped: interface-flapped
-  fields_mac_stats:
-    rx_bytes: input-bytes
-    rx_packets: input-packets
-    tx_bytes: output-bytes
-    tx_packets: output-packets
-  fields_flags:
-    running: { ifdf-running: flag }
-    present: { ifdf-present: flag }
+    flap_count: flap-count
+    elapsed_time: elapsed-time
+
+BgpRouteStatus:
+  rpc: get-bgp-summary-information
+  key:
+    - name
+    - ../peer-address
+  item: bgp-peer/bgp-rib
+  view: BgpRouteStatusView
+
+BgpRouteStatusView:
+  fields:
+    peer_as: ../peer-as
+    peer_address: ../peer-address
+    peer_type: ../peer-type
+    description: ../description
+    table: name
+    active_prefix_count: active-prefix-count
+    received_prefix_count: received-prefix-count
+    accepted_prefix_count: accepted-prefix-count
+    suppressed_prefix_count: suppressed-prefix-count
+
+VrrpStatus:
+  rpc: get-vrrp-information
+  key: interface
+  item: vrrp-interface
+  view: VrrpStatusView
+
+VrrpStatusView:
+  fields:
+    interface_state: interface_state
+    group: group
+    state: vrrp-state
+    mode: vrrp-mode
+
+BfdStatus:
+  rpc: get-bfd-session-information
+  key: session-interface
+  item: bfd-session
+  view: BfdStatusView
+
+BfdStatusView:
+  fields:
+    neighbor: session-neighbor
+    state: session-state
+
+ArpTableTextFSM2:
+  command: show arp no-resolve
+  platform: juniper_junos
+  key:
+    - ip
+    - mac
+  use_textfsm: True
+  view: ArpViewTextFSM2
+
+ArpViewTextFSM2:
+    fields:
+      mac: MAC
+      ip: IP_ADDRESS
+      interface: INTERFACE

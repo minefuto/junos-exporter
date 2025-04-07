@@ -29,7 +29,7 @@ options:
   --workers WORKERS     number of worker processes[default: 1]
 ```
 
-### Docker
+### Docker(Recommended)
 ```bash
 docker run -v <config file>:/app/config.yml ghcr.io/minefuto/junos-exporter
 ```
@@ -48,6 +48,7 @@ Please see the `config.yml` for configuration example.
 ```yaml
 general:
   prefix: junos  # prefix of the metrics
+  timeout: 60  # request timeout of exporter
 ```
 
 ### Create PyEZ Operational Tables
@@ -57,89 +58,92 @@ general:
 
 Put the yaml or textfsm file in the following directory.
 - `./op/` or `~/.junos-exporter/op/` : structured & unstructured tables and views configuration file
-- `./textfsm/` or `~/.junos-exporter/textfsm/` : textfsm template file
+- pyez structured & unstructured tables and views configuration file
+  - docker: `/app/op/`
+  - pip: `~/.junos-exporter/op/`
+- textfsm template file
+  - docker: `/app/textfsm/`
+  - pip: `~/.junos-exporter/textfsm/`
 
-If using the following predefined operational table, you can skip this step.
-- [Document](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-predefined.html)
-  - [Source Code](https://github.com/Juniper/py-junos-eznc/tree/master/lib/jnpr/junos/op)
+If use predefined operational table, you can skip this step only using docker.
 
 ### Create Convert Rule
 ```yaml
 optables:
-  EthPortTable:  # pyez table name
+  PhysicalInterfaceStatus:  # pyez table name
     metrics:
-      - name: interface_link_status  # metrics name
-        value: oper  # metrics value
+      - name: interface_speed  # metrics name
+        value: speed  # metrics value
         type: gauge  # metrics type(gauge or count or untyped)
-        help: physical interface link status(up:2, down:1)  # metrics help
+        help: Speed of show interfaces extensive  # metrics help
         value_transform:  #(optional) if metrics value is str, can be transformed to float
-          up: 2
-          down: 1
+          100mbps: 100000000
+          1000mbps: 1000000000
+          1Gbps: 1000000000
+          10Gbps: 10000000000
+          100Gbps: 100000000000
           _: 0  #(optional) value_transform's fallback value(default: NaN)
       - name: interface_lastflap_seconds
         value: interface_flapped
         type: counter
-        regex: (\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*  #(optional) metric value can be extracted by using regexp
+        help: Last flapped of show interfaces extensive
         to_unixtime: True  # transform to unixtime for timestamp/uptime  e.g. 2025-03-22 12:57:10, 10w3d 11:11:11
-        help: physical interface link flap timestamp
+-snip-
     labels:
-      - name: interface  # label name
+      - name: interface  #(optional) label name
         value: name  # label value
+        regex: ([^\.]*).*  #(optional) label values can be extracted by using regexp
+      - name: unit
+        value: name
+        regex: .*\.(\d+)
       - name: description
         value: description
-        regex: (.*)  #(optional) label values can be extracted by using regexp
-      - name: link_mode
-        value: link_mode
-      - name: mac
-        value: macaddr
 ```
+
 `metrics value` and `label value` select from fields key of PyEZ View.
 ```yaml
-EthPortView:
-  groups:
-    mac_stats: ethernet-mac-statistics
-    flags: if-device-flags
-  fields: <- !!
-    oper: oper-status
-    admin: admin-status
-    description: description
-    mtu: { mtu : int }
-    link_mode: link-mode
-    macaddr: current-physical-address
+  PhysicalInterfaceStatusView:
+    groups:
+      traffic_statistics: traffic-statistics
+      input_error_list: input-error-list
+      output_error_list: output-error-list
+      ethernet_pcs_statistics: ethernet-pcs-statistics
+    fields: <- !!
+      oper_status: oper-status
+      admin_status: admin-status
+      description: description
+      speed: speed
+      mtu: mtu
+      link_mode: link-mode
+      interface_flapped: interface-flapped
 -snip-
 ```
 PyEZ Table's key is automatically mapping to `key` and `name`.
 ```yaml
-EthPortTable:
-  rpc: get-interface-information
-  args:
-    media: True
-    interface_name: '[afgxe][et]-*'
-  args_key: interface_name <- !!
-  item: physical-interface
-  view: EthPortView
+RoutingEngineStatus:
+  rpc: get-route-engine-information
+  item: route-engine
+  key: slot <- !!
+  view: RoutingEngineStatusView
 ```
 If there are multiple keys, a number is assigned at the end such as `key.0`, `key.1`.
 ```yaml
-IsisAdjacencyTable:
-  rpc: get-isis-adjacency-information
-  args:
-    extensive: True
-  item: isis-adjacency
+LldpStatus:
+  rpc: get-lldp-neighbors-information
+  item: lldp-neighbor-information
   key:
-    - interface-name  <- key.0, name.0
-    - system-name     <- key.1, name.1
-  view: IsisAdjacencyView
+    - lldp-local-port-id <- key.0, name.0
+    - lldp-remote-port-id <- key.1, name.1
+  view: LldpStatusView
 ```
 The metrics value can be a static value.
 ```yaml
-optables:
-  ArpTable:
+  HardwareStatus:
     metrics:
-      - name: arp_entry_info
-        value: 1  <- !!
+      - name: hardware_info
+        value: 1 <- !!
         type: gauge
-        help: arp entry info
+        help: Infomation of show chassis hardware
 ```
 
 ### Create Junos Device Config
@@ -152,8 +156,10 @@ credentials:
 modules:
   router:  # module name
     tables:  # pyez table name(which pyez table information to retrieve in this module)
-      - ArpTable
-      - EthPortTable
+      - SystemAlarmStatus
+      - ChassisAlarmStatus
+      - FpcStatus
+      - HardwareStatus
 ```
 
 ### Create Prometheus Config
@@ -167,11 +173,6 @@ scrape_configs:
         labels:
           __meta_credential: "vjunos"  # credential name
           __meta_module: "router"  # module name
-      - targets:
-          - "192.168.10.3"
-        labels:
-          __meta_credential: "vjunos"
-          __meta_module: "switch"
     relabel_configs:
       - source_labels: [__meta_credential]
         target_label: __param_credential
