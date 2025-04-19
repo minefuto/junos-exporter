@@ -200,9 +200,15 @@ class Connector:
         return items
 
     async def debug(self, name: str) -> list[dict]:
-        table = await self._get(name)
+        if globals().get(name):
+            table = await self._get(name)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"OpTable is not defined(OpTable: {name}",
+            )
         if table is None:
-            return []
+            return None
         return table.to_json()
 
 
