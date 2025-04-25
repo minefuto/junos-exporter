@@ -30,7 +30,7 @@ def cli() -> None:
     parser.add_argument(
         "--reload",
         action="store_true",
-        help='enable auto reload',
+        help="enable auto reload",
     )
     parser.add_argument(
         "--root-path",

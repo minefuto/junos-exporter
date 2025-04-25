@@ -148,14 +148,14 @@ class Connector:
         else:
             raise NotImplementedError
 
-    async def collect(self, name: str) -> list[dict]:
+    async def collect(self, name: str) -> list[dict] | None:
         logger.debug(f"Start to get table items(Target: {self.host}, Table: {name})")
         table = await self._get(name)
         if table is None:
             logger.debug(
                 f"Could not get table items(Target: {self.host}, Table: {name}, Error: table is None)"
             )
-            return []
+            return None
         logger.debug(
             f"Completed to get table items(Target: {self.host}, Table: {name})"
         )

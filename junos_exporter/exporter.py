@@ -168,26 +168,47 @@ class MetricConverter:
 
 
 class Exporter:
-    def __init__(self, converter: dict[str, list[MetricConverter]]) -> None:
+    def __init__(
+        self, converter: dict[str, list[MetricConverter]], prefix: str
+    ) -> None:
         self.converter = converter
+        self.prefix = prefix
 
     async def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
+        up_status: int = 1
         for name, metrics in self.converter.items():
             items = await connector.collect(name)
+            if items is None:
+                up_status = 0
+                continue
+
+            if not items:
+                logger.debug(
+                    f"table items is empty(Target: {connector.host}, Table: {name})"
+                )
+                continue
+
             logger.debug(
-                f"Start to convert table items(Target: {connector.host}), Table: {name})"
+                f"Start to convert table items(Target: {connector.host}, Table: {name})"
             )
             exposition.append("\n".join([metric.convert(items) for metric in metrics]))
             logger.debug(
-                f"Completed to convert table items(Target: {connector.host}), Table: {name})"
+                f"Completed to convert table items(Target: {connector.host}, Table: {name})"
             )
+
+        exposition.append(
+            f"# HELP {self.prefix}_up All rpcs to target were successful"
+        )
+        exposition.append(f"# TYPE {self.prefix}_up gauge")
+        exposition.append(f"{self.prefix}_up{{}} {up_status}\n")
         return "\n".join(exposition)
 
 
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
         self.converters = {}
+        self.prefix = config.prefix
         unixtime_regex: dict[str, re.Pattern] = {
             "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
             "wd_uptime": re.compile(r".*(\d+)w(\d+)d (\d\d):(\d\d):(\d\d).*"),
@@ -202,7 +223,7 @@ class ExporterBuilder:
                     MetricConverter(
                         metric,
                         labels=config.optables[table].labels,
-                        prefix=config.prefix,
+                        prefix=self.prefix,
                         unixtime_regex=unixtime_regex,
                     )
                     for metric in config.optables[table].metrics
@@ -216,4 +237,4 @@ class ExporterBuilder:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Module is not defined(Module: {module_name})",
             )
-        return Exporter(self.converters[module_name])
+        return Exporter(self.converters[module_name], self.prefix)
