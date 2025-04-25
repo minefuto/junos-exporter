@@ -96,7 +96,7 @@ class Metric(BaseModel):
     def to_defaultdict(cls, value_transform: dict) -> dict:
         if default := value_transform.get("_"):
             return defaultdict(lambda: float(default), value_transform)
-        return defaultdict(lambda: "NaN", value_transform)
+        return defaultdict(lambda: float("NaN"), value_transform)
 
 
 class OpTable(BaseModel):

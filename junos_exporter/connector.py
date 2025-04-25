@@ -199,7 +199,7 @@ class Connector:
 
         return items
 
-    async def debug(self, name: str) -> list[dict]:
+    async def debug(self, name: str) -> list[dict] | None:
         if globals().get(name):
             table = await self._get(name)
         else:

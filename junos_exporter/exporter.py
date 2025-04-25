@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta
+from math import isfinite, isnan
 
 from fastapi import HTTPException, status
 
@@ -102,6 +103,14 @@ class MetricConverter:
         return label_exposition
 
     def convert(self, items: list[dict]) -> str:
+        def to_prom(value: float) -> float | str:
+            if isfinite(value):
+                return value
+            elif isnan(value):
+                return "NaN"
+            else:  # isinf
+                return "+Inf" if value > 0 else "-Inf"
+
         exposition = []
         exposition.append(f"# HELP {self.name} {self.help_}\n")
         exposition.append(f"# TYPE {self.name} {self.type_}\n")
@@ -112,15 +121,10 @@ class MetricConverter:
                 try:
                     # static value
                     exposition.append(
-                        f"{self.name}{{{label_exposition}}} {float(self.value_name)}\n"
+                        f"{self.name}{{{label_exposition}}} {to_prom(float(self.value_name))}\n"
                     )
                     continue
                 except ValueError:
-                    if self.value_name in ["NaN", "-Inf", "+Inf"]:
-                        exposition.append(
-                            f"{self.name}{{{label_exposition}}} {self.value_name}\n"
-                        )
-                        continue
                     logger.debug(
                         f"Could not convert metric value(Name: {self.name}, Value: {self.value_name}, Error: value does not exist)"
                     )
@@ -145,7 +149,7 @@ class MetricConverter:
 
             if self.value_transform:
                 exposition.append(
-                    f"{self.name}{{{label_exposition}}} {self.value_transform[value]}\n"
+                    f"{self.name}{{{label_exposition}}} {to_prom(self.value_transform[value])}\n"
                 )
             elif self.to_unixtime:
                 exposition.append(
@@ -154,14 +158,9 @@ class MetricConverter:
             else:
                 try:
                     exposition.append(
-                        f"{self.name}{{{label_exposition}}} {float(value)}\n"
+                        f"{self.name}{{{label_exposition}}} {to_prom(float(value))}\n"
                     )
                 except ValueError:
-                    if value in ["NaN", "-Inf", "+Inf"]:
-                        exposition.append(
-                            f"{self.name}{{{label_exposition}}} {value}\n"
-                        )
-                        continue
                     logger.debug(
                         f"Could not convert metric value(Metric: {self.name}, Value({self.value_name}): {value}, Error: could not convert type to float)"
                     )
