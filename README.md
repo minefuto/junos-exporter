@@ -15,15 +15,16 @@ So, this exporter's metrics can be flexibly configured by simply editing yaml.
 ## Usage
 
 ```sh
-usage: junos-exporter [-h] [--log-level {critical,error,warning,info,debug,trace}] [--no-access-log] [--port PORT] [--root-path ROOT_PATH]
-                      [--workers WORKERS]
+usage: junos-exporter [-h] [--host HOST] [--log-level {critical,error,warning,info,debug,trace}] [--no-access-log] [--port PORT] [--reload] [--root-path ROOT_PATH] [--workers WORKERS]
 
 options:
   -h, --help            show this help message and exit
+  --host HOST           listen address[default: 0.0.0.0]
   --log-level {critical,error,warning,info,debug,trace}
                         log level[default: info]
   --no-access-log       disable access log
-  --port PORT           listening port[default: 9326]
+  --port PORT           listen port[default: 9326]
+  --reload              enable auto reload
   --root-path ROOT_PATH
                         root path[default: ""]
   --workers WORKERS     number of worker processes[default: 1]
