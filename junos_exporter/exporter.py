@@ -197,9 +197,7 @@ class Exporter:
                 f"Completed to convert table items(Target: {connector.host}, Table: {name})"
             )
 
-        exposition.append(
-            f"# HELP {self.prefix}_up All rpcs to target were successful"
-        )
+        exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")
         exposition.append(f"# TYPE {self.prefix}_up gauge")
         exposition.append(f"{self.prefix}_up{{}} {up_status}\n")
         return "\n".join(exposition)
