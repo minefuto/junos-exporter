@@ -185,7 +185,7 @@ class Exporter:
 
             if not items:
                 logger.debug(
-                    f"table items is empty(Target: {connector.host}, Table: {name})"
+                    f"Table items are empty(Target: {connector.host}, Table: {name})"
                 )
                 continue
 

@@ -10,7 +10,7 @@ from jnpr.junos.factory.optable import OpTable
 from jnpr.junos.factory.state_machine import StateMachine
 from jnpr.junos.jxml import remove_namespaces_and_spaces
 from lxml import etree
-from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliTimeout
+from scrapli.exceptions import ScrapliAuthenticationFailed
 from scrapli_netconf import AsyncNetconfDriver
 
 from textfsm.parser import TextFSMTemplateError
@@ -50,36 +50,26 @@ class Connector:
             logger.debug(f"Start to open netconf connection(Target: {self.host})")
             await self.conn.open()
             logger.debug(f"Completed to open netconf connection(Target: {self.host})")
-        except Exception as err:
+        except ScrapliAuthenticationFailed as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.host}, Error: {err})"
+                f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.host}, Error: {err})",
+                detail=f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})",
             )
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
-        try:
-            await self.conn.close()
-            logger.debug(f"Closed netconf connection(Target: {self.host})")
-        except ScrapliAuthenticationFailed as err:
-            logger.error(
-                f"Cannot close netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})"
-            )
-        except ScrapliTimeout as err:
-            logger.error(
-                f"Cannot close netconf connection(Target: {self.host}, ScrapliTimeout: {err})"
-            )
-        except Exception as err:
-            logger.error(
-                f"Cannot close netconf connection(Target: {self.host}, Error: {err})"
-            )
+        await self.conn.close()
+        logger.debug(f"Closed netconf connection(Target: {self.host})")
 
     async def _get_rpc(self, filter_: str) -> etree._Element:
         rpc = await self.conn.rpc(filter_=filter_)
         xml = rpc.xml_result
+        if len(xml) == 0:
+            raise RpcError("rpc-reply is empty")
+
         if re.match(r"\{.*\}rpc-reply$", xml.tag):
             if not re.match(r"\{.*\}rpc-error$", xml[0].tag):
                 return xml[0]
@@ -140,9 +130,9 @@ class Connector:
                     f"Could not get table items(Target: {self.host}, Table: {name}, TextFSMTemplateError: {err})"
                 )
                 return None
-            except Exception as err:
+            except RpcError as err:
                 logger.error(
-                    f"Could not get table items(Target: {self.host}, Table: {name}, Error: {err})"
+                    f"Could not get table items(Target: {self.host}, Table: {name}, RpcError: {err})"
                 )
                 return None
         else:
@@ -152,9 +142,6 @@ class Connector:
         logger.debug(f"Start to get table items(Target: {self.host}, Table: {name})")
         table = await self._get(name)
         if table is None:
-            logger.debug(
-                f"Could not get table items(Target: {self.host}, Table: {name}, Error: table is None)"
-            )
             return None
         logger.debug(
             f"Completed to get table items(Target: {self.host}, Table: {name})"
