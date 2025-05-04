@@ -58,6 +58,15 @@ class Connector:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})",
             )
+        except ConnectionError as err:
+            logger.error(
+                f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})",
+            )
+
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
@@ -81,6 +90,12 @@ class Connector:
             raise RpcError("unknown rpc error")
 
     async def _get(self, name: str) -> OpTable | CMDTable | None:
+        if not globals().get(name):
+            logger.error(
+                f"Could not get table items(Target: {self.host}, Table: {name}, Error: OpTable is not defined)"
+            )
+            return None
+
         if issubclass(globals()[name], OpTable):
             table = globals()[name]()
 
