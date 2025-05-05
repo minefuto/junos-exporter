@@ -35,7 +35,9 @@ class General(BaseModel):
 
 class Credential(BaseModel):
     username: str
-    password: str
+    password: str = ""
+    private_key: str = ""
+    private_key_passphrase: str = ""
 
 
 class Module(BaseModel):

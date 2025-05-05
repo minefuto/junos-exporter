@@ -7,6 +7,11 @@ credentials:
     username: admin
     password: admin@123
 
+  vjunos_key:
+    username: admin
+    private_key: ~/.ssh/id_rsa
+    private_key_passphrase: admin@123
+
 modules:
   router:
     tables:

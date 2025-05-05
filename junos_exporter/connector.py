@@ -3,6 +3,8 @@ import re
 from glob import glob
 
 import yaml
+from asyncssh.pbe import KeyEncryptionError
+from asyncssh.public_key import KeyImportError
 from fastapi import HTTPException, status
 from jnpr.junos.factory import loadyaml
 from jnpr.junos.factory.cmdtable import CMDTable
@@ -35,6 +37,16 @@ class Connector:
         ssh_config: str | None,
     ) -> None:
         self.host: str = host
+
+        transport_options: dict = {"asyncssh": {}}
+        if credential.private_key:
+            transport_options["asyncssh"]["client_keys"] = credential.private_key
+
+        if credential.private_key_passphrase:
+            transport_options["asyncssh"]["passphrase"] = (
+                credential.private_key_passphrase
+            )
+
         self.conn: AsyncNetconfDriver = AsyncNetconfDriver(
             host=self.host,
             auth_username=credential.username,
@@ -42,6 +54,7 @@ class Connector:
             auth_strict_key=False,
             ssh_config_file=True if ssh_config is None else ssh_config,
             transport="asyncssh",
+            transport_options=transport_options,
         )
         self.textfsm_dir: str | None = textfsm_dir
 
@@ -58,6 +71,22 @@ class Connector:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})",
             )
+        except KeyImportError as err:
+            logger.error(
+                f"Could not open netconf connection(Target: {self.host}, KeyImportError: {err})"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Could not open netconf connection(Target: {self.host}, KeyImportError: {err})",
+            )
+        except KeyEncryptionError as err:
+            logger.error(
+                f"Could not open netconf connection(Target: {self.host}, KeyEncryptionError: {err})"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Could not open netconf connection(Target: {self.host}, KeyEncryptionError: {err})",
+            )
         except ConnectionError as err:
             logger.error(
                 f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})"
@@ -66,7 +95,6 @@ class Connector:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})",
             )
-
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
