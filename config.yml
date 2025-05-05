@@ -417,11 +417,11 @@ optables:
       - name: route_protocol_route_count
         value: protocol_route_count
         type: gauge
-        help: Protocol routes of show route
+        help: Protocol routes of show route summary
       - name: route_active_route_count
         value: active_route_count
         type: gauge
-        help: Protocol active routes of show route
+        help: Protocol active routes of show route summary
     labels:
       - name: table
         value: key.0

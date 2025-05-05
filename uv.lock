@@ -286,7 +286,7 @@ wheels = [
 
 [[package]]
 name = "junos-exporter"
-version = "0.0.8"
+version = "0.0.9"
 source = { editable = "." }
 dependencies = [
     { name = "asyncssh" },
@@ -309,7 +309,7 @@ dev = [
 requires-dist = [
     { name = "asyncssh", specifier = ">=2.20.0" },
     { name = "fastapi", specifier = ">=0.115.8" },
-    { name = "junos-eznc", specifier = ">=2.7.2" },
+    { name = "junos-eznc", specifier = ">=2.7.4" },
     { name = "ntc-templates", specifier = ">=7.7.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "scrapli-netconf", specifier = ">=2025.1.30" },
