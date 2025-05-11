@@ -42,11 +42,11 @@ async def metrics(module: str, connector: Connector = Depends(get_connector)) ->
         )
     except asyncio.TimeoutError:
         logger.error(
-            f"Request timeout(Target: {connector.host}, Timeout: {config.timeout}"
+            f"Request timeout(Target: {connector.host}, Timeout: {config.timeout})"
         )
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=f"Request timeout(Target: {connector.host}, Timeout: {config.timeout}",
+            detail=f"Request timeout(Target: {connector.host}, Timeout: {config.timeout})",
         )
 
 

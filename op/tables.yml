@@ -319,18 +319,3 @@ BfdStatusView:
   fields:
     neighbor: session-neighbor
     state: session-state
-
-ArpTableTextFSM2:
-  command: show arp no-resolve
-  platform: juniper_junos
-  key:
-    - ip
-    - mac
-  use_textfsm: True
-  view: ArpViewTextFSM2
-
-ArpViewTextFSM2:
-    fields:
-      mac: MAC
-      ip: IP_ADDRESS
-      interface: INTERFACE
