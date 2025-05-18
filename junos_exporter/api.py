@@ -28,13 +28,17 @@ async def http_exception_handler(request, exc) -> PlainTextResponse:
     return PlainTextResponse(content=str(exc.detail), status_code=exc.status_code)
 
 
-async def get_connector(target: str, credential: str = "default") -> AsyncGenerator[None, None]:
+async def get_connector(
+    target: str, credential: str = "default"
+) -> AsyncGenerator[None, None]:
     async with app.connector.build(target, credential) as connector:  # type: ignore
         yield connector
 
 
 @app.get("/metrics", tags=["exporter"], response_class=PlainTextResponse)
-async def metrics(module: str = "default", connector: Connector = Depends(get_connector)) -> str:
+async def metrics(
+    module: str = "default", connector: Connector = Depends(get_connector)
+) -> str:
     exporter: Exporter = app.exporter.build(module)  # type: ignore
     try:
         return await asyncio.wait_for(
