@@ -31,12 +31,12 @@ class RpcError(Exception):
 class Connector:
     def __init__(
         self,
-        host: str,
+        target: str,
         credential: Credential,
         textfsm_dir: str | None,
         ssh_config: str | None,
     ) -> None:
-        self.host: str = host
+        self.target: str = target
 
         transport_options: dict = {"asyncssh": {}}
         if credential.private_key:
@@ -48,7 +48,7 @@ class Connector:
             )
 
         self.conn: AsyncNetconfDriver = AsyncNetconfDriver(
-            host=self.host,
+            host=self.target,
             auth_username=credential.username,
             auth_password=credential.password,
             auth_strict_key=False,
@@ -60,46 +60,46 @@ class Connector:
 
     async def __aenter__(self) -> "Connector":
         try:
-            logger.debug(f"Start to open netconf connection(Target: {self.host})")
+            logger.debug(f"Start to open netconf connection(Target: {self.target})")
             await self.conn.open()
-            logger.debug(f"Completed to open netconf connection(Target: {self.host})")
+            logger.debug(f"Completed to open netconf connection(Target: {self.target})")
         except ScrapliAuthenticationFailed as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})"
+                f"Could not open netconf connection(Target: {self.target}, ScrapliAuthenticationFailed: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.host}, ScrapliAuthenticationFailed: {err})",
+                detail=f"Could not open netconf connection(Target: {self.target}, ScrapliAuthenticationFailed: {err})",
             )
         except KeyImportError as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.host}, KeyImportError: {err})"
+                f"Could not open netconf connection(Target: {self.target}, KeyImportError: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.host}, KeyImportError: {err})",
+                detail=f"Could not open netconf connection(Target: {self.target}, KeyImportError: {err})",
             )
         except KeyEncryptionError as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.host}, KeyEncryptionError: {err})"
+                f"Could not open netconf connection(Target: {self.target}, KeyEncryptionError: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.host}, KeyEncryptionError: {err})",
+                detail=f"Could not open netconf connection(Target: {self.target}, KeyEncryptionError: {err})",
             )
         except ConnectionError as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})"
+                f"Could not open netconf connection(Target: {self.target}, ConnectionError: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.host}, ConnectionError: {err})",
+                detail=f"Could not open netconf connection(Target: {self.target}, ConnectionError: {err})",
             )
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         await self.conn.close()
-        logger.debug(f"Closed netconf connection(Target: {self.host})")
+        logger.debug(f"Closed netconf connection(Target: {self.target})")
 
     async def _get_rpc(self, filter_: str) -> etree._Element:
         rpc = await self.conn.rpc(filter_=filter_)
@@ -120,7 +120,7 @@ class Connector:
     async def _get(self, name: str) -> OpTable | CMDTable | None:
         if not globals().get(name):
             logger.error(
-                f"Could not get table items(Target: {self.host}, Table: {name}, Error: OpTable is not defined)"
+                f"Could not get table items(Target: {self.target}, Table: {name}, Error: OpTable is not defined)"
             )
             return None
 
@@ -140,7 +140,7 @@ class Connector:
                 return table
             except RpcError as err:
                 logger.error(
-                    f"Could not get table items(Target: {self.host}, Table: {name}, RpcError: {err})"
+                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
                 )
                 return None
 
@@ -170,24 +170,24 @@ class Connector:
                 return table
             except TextFSMTemplateError as err:
                 logger.error(
-                    f"Could not get table items(Target: {self.host}, Table: {name}, TextFSMTemplateError: {err})"
+                    f"Could not get table items(Target: {self.target}, Table: {name}, TextFSMTemplateError: {err})"
                 )
                 return None
             except RpcError as err:
                 logger.error(
-                    f"Could not get table items(Target: {self.host}, Table: {name}, RpcError: {err})"
+                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
                 )
                 return None
         else:
             raise NotImplementedError
 
     async def collect(self, name: str) -> list[dict] | None:
-        logger.debug(f"Start to get table items(Target: {self.host}, Table: {name})")
+        logger.debug(f"Start to get table items(Target: {self.target}, Table: {name})")
         table = await self._get(name)
         if table is None:
             return None
         logger.debug(
-            f"Completed to get table items(Target: {self.host}, Table: {name})"
+            f"Completed to get table items(Target: {self.target}, Table: {name})"
         )
 
         items = []
@@ -269,17 +269,17 @@ class ConnecterBuilder:
             if re.match(r".+\.(yml|yaml)$", yml):
                 globals().update(loadyaml(yaml.safe_load(yml)))
 
-    def build(self, host: str, credential_name: str) -> Connector:
+    def build(self, target: str, credential_name: str) -> Connector:
         if credential_name not in self.credentials:
             logger.error(
-                f"Could not build Connector(Target: {host}, Credential: {credential_name}, Error: credential is not defined)"
+                f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not build Connector(Target: {host}, Credential: {credential_name}, Error: credential is not defined)",
+                detail=f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)",
             )
         return Connector(
-            host=host,
+            target=target,
             credential=self.credentials[credential_name],
             textfsm_dir=self.textfsm_dir,
             ssh_config=self.ssh_config,

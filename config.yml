@@ -1,19 +1,16 @@
 general:
-  prefix: junos
+  prefix: junoss
   timeout: 60
 
 credentials:
-  vjunos:
+  default:
     username: admin
     password: admin@123
-
-  vjunos_key:
-    username: admin
-    private_key: ~/.ssh/id_rsa
-    private_key_passphrase: admin@123
+#    private_key: ~/.ssh/id_rsa
+#    private_key_passphrase: admin@123
 
 modules:
-  router:
+  default:
     tables:
       - SystemAlarmStatus
       - ChassisAlarmStatus

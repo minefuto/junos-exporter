@@ -185,16 +185,16 @@ class Exporter:
 
             if not items:
                 logger.debug(
-                    f"Table items are empty(Target: {connector.host}, Table: {name})"
+                    f"Table items are empty(Target: {connector.target}, Table: {name})"
                 )
                 continue
 
             logger.debug(
-                f"Start to convert table items(Target: {connector.host}, Table: {name})"
+                f"Start to convert table items(Target: {connector.target}, Table: {name})"
             )
             exposition.append("\n".join([metric.convert(items) for metric in metrics]))
             logger.debug(
-                f"Completed to convert table items(Target: {connector.host}, Table: {name})"
+                f"Completed to convert table items(Target: {connector.target}, Table: {name})"
             )
 
         exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")

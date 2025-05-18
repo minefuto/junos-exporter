@@ -40,7 +40,7 @@ pip install junos-exporter
      timeout: 60    # Request timeout for the exporter
 
    credentials:
-     vjunos: # Credential name
+     default:
        username: admin  # Junos device's username
        password: admin@123  # Junos device's password
    ```
@@ -52,10 +52,6 @@ pip install junos-exporter
        static_configs:
          - targets:
              - "192.168.1.1"  # Target device
-             - "192.168.1.2"
-           labels:
-             __params_credential: "vjunos"  # Credential name
-             __params_module: "router"
        relabel_configs:
          - source_labels: [__address__]
            target_label: __param_target
@@ -86,7 +82,7 @@ pip install junos-exporter
      timeout: 60    # Request timeout for the exporter
 
    credentials:
-     vjunos: # Credential name
+     default:
        username: admin  # Junos device's username
        password: admin@123  # Junos device's password
    ```
@@ -103,10 +99,6 @@ pip install junos-exporter
        static_configs:
          - targets:
              - "192.168.1.1"  # Target device
-             - "192.168.1.2"
-           labels:
-             __params_credential: "vjunos"  # Credential name
-             __params_module: "router"
        relabel_configs:
          - source_labels: [__address__]
            target_label: __param_target
@@ -142,16 +134,60 @@ options:
   --workers WORKERS     Number of worker processes [default: 1]
 ```
 
+## Credentials
+
+This exporter allows you configure the authentication method per Junos device.  
+Add the module_name defined in the `credentials` section of `config.yml` to the query parameter when scraping.  
+e.g. http://localhost:9326/metrics?credential=vjunos&target=192.168.10.12
+By setting `__params_credential` to `vjunos` in the prometheus configuration, `vjunos` credential will be used.
+
+If `credential` is not specified as a query parameter, predefined credential(`default`) is used when scraping.
+
+```yaml
+credentials:
+  vjunos: # password authentication
+    username: admin
+    password: admin@123
+
+  vjunos_key: # public key authentication
+    username: admin
+    private_key: ~/.ssh/id_rsa
+    private_key_passphrase: admin@123 # option
+```
+
+
+```yaml
+scrape_configs:
+  - job_name: "junos-exporter"
+    static_configs:
+      - targets:
+          - "192.168.1.1"  # Target device using default credential
+      - targets:
+          - "192.168.1.2"  # Target device using "vjunos" credential
+        labels:
+          __params_credential: "vjunos"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9326
+```
+
 ## Metrics
 
 This exporter allows you configure the metrics to be scraped per Junos device.  
 Add the module_name defined in the `modules` section of `config.yml` to the query parameter when scraping.  
-e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12&credential=vjunos
+e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
+By setting `__params_module` to `router` in the prometheus configuration, `router` module will be used.
+
+If `module` is not specified as a query parameter, predefined module(`default`) is used when scraping.
 
 
 ### Predefined Metrics
 
-A default module named `router` is predefined, providing metrics such as:
+A module named `default` is predefined, providing metrics such as:
 
 - alarm information from `show system alarm/show chassis alarm`
 - fpc status and cpu/memory utilization from `show chassis fpc`
@@ -168,8 +204,6 @@ A default module named `router` is predefined, providing metrics such as:
 - bgp status/prefix count from `show bgp summary`
 - vrrp status from `show vrrp`
 - bfd status from `show bfd session`
-
-By setting `__params_module` to `router` in the prometheus configuration, these metrics will be scraped.
 
 
 ### Custom Metrics
@@ -359,7 +393,7 @@ Here is an example to create custom metrics using the `show interface extensive`
    Add the table name to the `modules` section in `config.yml`:
    ```yaml
    modules:
-     custom_module:
+     router:
        tables:
          - PhysicalInterfaceStatus
    ```
@@ -373,8 +407,7 @@ Here is an example to create custom metrics using the `show interface extensive`
              - "192.168.1.1"  # Target device
              - "192.168.1.2"
            labels:
-             __params_credential: "vjunos"  # Credential name
-             __params_module: "custom_module"
+             __params_module: "router"
        relabel_configs:
          - source_labels: [__address__]
            target_label: __param_target
