@@ -1,5 +1,5 @@
 general:
-  prefix: junoss
+  prefix: junos
   timeout: 60
 
 credentials:
