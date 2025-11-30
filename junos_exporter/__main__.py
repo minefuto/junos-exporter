@@ -2,6 +2,49 @@ import argparse
 
 import uvicorn
 
+LOG_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "class": "uvicorn.logging.DefaultFormatter",
+            "format": "%(asctime)s %(levelprefix)s %(message)s",
+            "use_colors": None,
+        },
+        "access": {
+            "class": "uvicorn.logging.AccessFormatter",
+            "format": '%(asctime)s %(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+        },
+    },
+    "handlers": {
+        "default": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+        "access": {
+            "formatter": "access",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "uvicorn.error": {
+            "level": "INFO",
+        },
+        "uvicorn.access": {
+            "handlers": ["access"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
 
 def cli() -> None:
     parser = argparse.ArgumentParser()
@@ -50,7 +93,7 @@ def cli() -> None:
         host=args.host,
         port=args.port,
         workers=args.workers,
-        log_config="log_config.yml",
+        log_config=LOG_CONFIG,
         log_level=args.log_level,
         root_path=args.root_path,
         access_log=args.no_access_log,

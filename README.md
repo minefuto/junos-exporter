@@ -87,12 +87,7 @@ pip install junos-exporter
        password: admin@123  # Junos device's password
    ```
 
-3. **Download `op/tables.yml`**:
-   ```sh
-   curl -s -o ~/.junos-exporter/op/tables.yml --create-dirs https://raw.githubusercontent.com/minefuto/junos-exporter/refs/heads/main/op/tables.yml
-   ```
-
-4. **Update prometheus configuration**:
+3. **Update prometheus configuration**:
    ```yaml
    scrape_configs:
      - job_name: "junos-exporter"
@@ -108,7 +103,7 @@ pip install junos-exporter
            replacement: 127.0.0.1:9326
    ```
 
-5. **Run the exporter**:
+4. **Run the exporter**:
    ```sh
    junos-exporter
    ```

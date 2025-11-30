@@ -1,6 +1,7 @@
 import os
 import re
 from glob import glob
+from importlib.resources import files
 
 import yaml
 from asyncssh.pbe import KeyEncryptionError
@@ -14,7 +15,6 @@ from jnpr.junos.jxml import remove_namespaces_and_spaces
 from lxml import etree
 from scrapli.exceptions import ScrapliAuthenticationFailed
 from scrapli_netconf import AsyncNetconfDriver
-
 from textfsm.parser import TextFSMTemplateError
 
 from .config import Config, Credential, logger
@@ -249,6 +249,8 @@ class ConnecterBuilder:
             self.optables_dir = os.path.expanduser("~/.junos-exporter/op")
         elif os.path.isdir("./op"):
             self.optables_dir = "./op"
+        else:
+            self.optables_dir = str(files("junos_exporter").joinpath("op"))
 
         self.textfsm_dir: str | None = None
         if os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
@@ -257,6 +259,8 @@ class ConnecterBuilder:
             )
         elif os.path.isdir("./textfsm"):
             self.textfsm_dir = os.path.abspath("./textfsm")
+        else:
+            self.optables_dir = str(files("junos_exporter").joinpath("textfsm"))
 
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config

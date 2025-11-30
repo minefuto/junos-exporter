@@ -2,6 +2,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from importlib.resources import files
 from logging import getLogger
 from typing import DefaultDict, Literal
 
@@ -113,6 +114,7 @@ class Config:
         config_location = [
             "config.yml",
             os.path.expanduser("~/.junos-exporter/config.yml"),
+            str(files("junos_exporter").joinpath("config.yml")),
         ]
         for c in config_location:
             if os.path.isfile(c):

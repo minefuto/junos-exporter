@@ -23,6 +23,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 
 [build-system]
@@ -41,6 +42,16 @@ dev = [
     "ruff>=0.9.7",
     "types-pyyaml>=6.0.12.20241230",
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"config.yml" = "junos_exporter/config.yml"
+"op" = "junos_exporter/op"
+"textfsm" = "junos_exporter/textfsm"
+
+[tool.hatch.build.targets.sdist.force-include]
+"config.yml" = "junos_exporter/config.yml"
+"op" = "junos_exporter/op"
+"textfsm" = "junos_exporter/textfsm"
 
 [tool.mypy]
 ignore_missing_imports = true
