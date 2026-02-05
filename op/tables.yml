@@ -46,7 +46,7 @@ HardwareStatusView:
 
 EnvironmentStatus:
   rpc: get-environment-information
-  item: environement-item
+  item: environment-item
   key: name
   view: EnvironmentStatusView
 
