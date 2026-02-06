@@ -1,5 +1,6 @@
 import os
 import re
+import socket
 from glob import glob
 from importlib.resources import files
 
@@ -13,7 +14,7 @@ from jnpr.junos.factory.optable import OpTable
 from jnpr.junos.factory.state_machine import StateMachine
 from jnpr.junos.jxml import remove_namespaces_and_spaces
 from lxml import etree
-from scrapli.exceptions import ScrapliAuthenticationFailed
+from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
 from scrapli_netconf import AsyncNetconfDriver
 from textfsm.parser import TextFSMTemplateError
 
@@ -32,11 +33,14 @@ class Connector:
     def __init__(
         self,
         target: str,
+        backup_connections: list[str],
         credential: Credential,
         textfsm_dir: str | None,
         ssh_config: str | None,
+        timeout_socket: int,
     ) -> None:
-        self.target: str = target
+        self.target = target
+        self.backup_connections = backup_connections
 
         transport_options: dict = {"asyncssh": {}}
         if credential.private_key:
@@ -47,6 +51,8 @@ class Connector:
                 credential.private_key_passphrase
             )
 
+        self.transport_options = transport_options
+
         self.conn: AsyncNetconfDriver = AsyncNetconfDriver(
             host=self.target,
             auth_username=credential.username,
@@ -55,51 +61,73 @@ class Connector:
             ssh_config_file=True if ssh_config is None else ssh_config,
             transport="asyncssh",
             transport_options=transport_options,
+            timeout_socket=timeout_socket,
         )
         self.textfsm_dir: str | None = textfsm_dir
 
-    async def __aenter__(self) -> "Connector":
+    async def open(self) -> "None":
         try:
-            logger.debug(f"Start to open netconf connection(Target: {self.target})")
             await self.conn.open()
-            logger.debug(f"Completed to open netconf connection(Target: {self.target})")
-        except ScrapliAuthenticationFailed as err:
+        except (
+            ScrapliConnectionNotOpened,
+            KeyImportError,
+            KeyEncryptionError,
+            socket.gaierror,
+        ) as err:
             logger.error(
-                f"Could not open netconf connection(Target: {self.target}, ScrapliAuthenticationFailed: {err})"
+                f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})"
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.target}, ScrapliAuthenticationFailed: {err})",
+                detail=f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})",
             )
-        except KeyImportError as err:
-            logger.error(
-                f"Could not open netconf connection(Target: {self.target}, KeyImportError: {err})"
+        except (OSError, ScrapliAuthenticationFailed) as err:
+            is_try_backup = True
+            if not self.backup_connections:
+                is_try_backup = False
+            elif isinstance(err, ScrapliAuthenticationFailed):
+                if not str(err) == "timed out opening connection to device":
+                    is_try_backup = False
+
+            if not is_try_backup:
+                logger.error(
+                    f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})",
+                )
+
+            self.conn = AsyncNetconfDriver(
+                host=self.backup_connections.pop(0),
+                auth_username=self.conn.auth_username,
+                auth_password=self.conn.auth_password,
+                auth_strict_key=self.conn.auth_strict_key,
+                ssh_config_file=self.conn.ssh_config_file,
+                transport="asyncssh",
+                transport_options=self.transport_options,
+                timeout_socket=self.conn.timeout_socket,
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.target}, KeyImportError: {err})",
+            logger.info(
+                f"Try to fallback to the backup connection(Target: {self.target}, Connection: {self.conn.host})"
             )
-        except KeyEncryptionError as err:
-            logger.error(
-                f"Could not open netconf connection(Target: {self.target}, KeyEncryptionError: {err})"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.target}, KeyEncryptionError: {err})",
-            )
-        except ConnectionError as err:
-            logger.error(
-                f"Could not open netconf connection(Target: {self.target}, ConnectionError: {err})"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.target}, ConnectionError: {err})",
-            )
+            await self.open()
+
+    async def __aenter__(self) -> "Connector":
+        logger.debug(
+            f"Start to open netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+        )
+        await self.open()
+        logger.debug(
+            f"Completed to open netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+        )
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         await self.conn.close()
-        logger.debug(f"Closed netconf connection(Target: {self.target})")
+        logger.debug(
+            f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+        )
 
     async def _get_rpc(self, filter_: str) -> etree._Element:
         rpc = await self.conn.rpc(filter_=filter_)
@@ -264,6 +292,7 @@ class ConnecterBuilder:
 
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
+        self.timeout_socket: int = config.timeout_socket
         self._load_optables()
 
     def _load_optables(self) -> None:
@@ -273,7 +302,15 @@ class ConnecterBuilder:
             if re.match(r".+\.(yml|yaml)$", yml):
                 globals().update(loadyaml(yaml.safe_load(yml)))
 
-    def build(self, target: str, credential_name: str) -> Connector:
+    def build(self, target_text: str, credential_name: str) -> Connector:
+        targets = target_text.split(",")
+        if len(targets) == 1:
+            target = targets[0]
+            backup_connections = []
+        else:
+            target = targets[0]
+            backup_connections = [t for t in targets[1:] if t != ""]
+
         if credential_name not in self.credentials:
             logger.error(
                 f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)"
@@ -284,7 +321,9 @@ class ConnecterBuilder:
             )
         return Connector(
             target=target,
+            backup_connections=backup_connections,
             credential=self.credentials[credential_name],
             textfsm_dir=self.textfsm_dir,
             ssh_config=self.ssh_config,
+            timeout_socket=self.timeout_socket,
         )
