@@ -23,6 +23,7 @@ logger = getLogger("uvicorn.error")
 class General(BaseModel):
     prefix: str = "junos"
     timeout: int = 60
+    timeout_socket: int = 15
     ssh_config: str | None = None
 
     @field_validator("ssh_config", mode="after")
@@ -153,6 +154,10 @@ class Config:
     @property
     def timeout(self) -> int:
         return self.general.timeout
+
+    @property
+    def timeout_socket(self) -> int:
+        return self.general.timeout_socket
 
     @property
     def ssh_config(self) -> str | None:

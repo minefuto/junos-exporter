@@ -37,6 +37,7 @@ class Connector:
         credential: Credential,
         textfsm_dir: str | None,
         ssh_config: str | None,
+        timeout_socket: int,
     ) -> None:
         self.target = target
         self.backup_connections = backup_connections
@@ -60,6 +61,7 @@ class Connector:
             ssh_config_file=True if ssh_config is None else ssh_config,
             transport="asyncssh",
             transport_options=transport_options,
+            timeout_socket=timeout_socket,
         )
         self.textfsm_dir: str | None = textfsm_dir
 
@@ -104,6 +106,7 @@ class Connector:
                 ssh_config_file=self.conn.ssh_config_file,
                 transport="asyncssh",
                 transport_options=self.transport_options,
+                timeout_socket=self.conn.timeout_socket,
             )
             logger.info(
                 f"Try to fallback to the backup connection(Target: {self.target}, Connection: {self.conn.host})"
@@ -289,6 +292,7 @@ class ConnecterBuilder:
 
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
+        self.timeout_socket: int = config.timeout_socket
         self._load_optables()
 
     def _load_optables(self) -> None:
@@ -321,4 +325,5 @@ class ConnecterBuilder:
             credential=self.credentials[credential_name],
             textfsm_dir=self.textfsm_dir,
             ssh_config=self.ssh_config,
+            timeout_socket=self.timeout_socket,
         )
