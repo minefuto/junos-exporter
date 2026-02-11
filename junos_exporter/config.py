@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 from importlib.resources import files
 from logging import getLogger
-from typing import DefaultDict, Literal
+from typing import Literal
 
 import yaml
 from pydantic import (
@@ -85,7 +85,7 @@ class Metric(BaseModel):
     type_: Literal["untyped", "counter", "gauge"] = Field("untyped", alias="type")
     help_: str = Field("", alias="help")
     regex: re.Pattern | None = None
-    value_transform: DefaultDict[str | bool, float] | None = None
+    value_transform: defaultdict[str | bool, float] | None = None
     to_unixtime: bool = False
 
     @field_validator("regex", mode="before")
@@ -120,7 +120,7 @@ class Config:
         for c in config_location:
             if os.path.isfile(c):
                 try:
-                    with open(c, "r") as f:
+                    with open(c) as f:
                         config = yaml.safe_load(f)
                 except ValidationError as e:
                     sys.exit(f"failed to load config file.\n{e}")

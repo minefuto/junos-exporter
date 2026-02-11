@@ -3,6 +3,7 @@ import re
 import socket
 from glob import glob
 from importlib.resources import files
+from types import TracebackType
 
 import yaml
 from asyncssh.pbe import KeyEncryptionError
@@ -18,7 +19,7 @@ from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNot
 from scrapli_netconf import AsyncNetconfDriver
 from textfsm.parser import TextFSMTemplateError
 
-from .config import Config, Credential, logger
+from junos_exporter.config import Config, Credential, logger
 
 
 class RpcError(Exception):
@@ -80,14 +81,14 @@ class Connector:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})",
-            )
+            ) from None
         except (OSError, ScrapliAuthenticationFailed) as err:
             is_try_backup = True
-            if not self.backup_connections:
+            if not self.backup_connections or (
+                isinstance(err, ScrapliAuthenticationFailed)
+                and str(err) != "timed out opening connection to device"
+            ):
                 is_try_backup = False
-            elif isinstance(err, ScrapliAuthenticationFailed):
-                if not str(err) == "timed out opening connection to device":
-                    is_try_backup = False
 
             if not is_try_backup:
                 logger.error(
@@ -96,7 +97,7 @@ class Connector:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})",
-                )
+                ) from None
 
             self.conn = AsyncNetconfDriver(
                 host=self.backup_connections.pop(0),
@@ -123,7 +124,12 @@ class Connector:
         )
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         await self.conn.close()
         logger.debug(
             f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
@@ -135,9 +141,10 @@ class Connector:
         if len(xml) == 0:
             raise RpcError("rpc-reply is empty")
 
-        if re.match(r"\{.*\}rpc-reply$", xml.tag):
-            if not re.match(r"\{.*\}rpc-error$", xml[0].tag):
-                return xml[0]
+        if re.match(r"\{.*\}rpc-reply$", xml.tag) and not re.match(
+            r"\{.*\}rpc-error$", xml[0].tag
+        ):
+            return xml[0]
         if err := xml.find(
             ".//{urn:ietf:params:xml:ns:netconf:base:1.0}error-message"
         ).text:

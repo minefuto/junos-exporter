@@ -4,8 +4,8 @@ from math import isfinite, isnan
 
 from fastapi import HTTPException, status
 
-from .config import Config, Label, Metric, logger
-from .connector import Connector
+from junos_exporter.config import Config, Label, Metric, logger
+from junos_exporter.connector import Connector
 
 
 class MetricConverter:
