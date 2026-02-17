@@ -4,15 +4,11 @@
 ![PyPI](https://img.shields.io/pypi/v/junos-exporter)
 ![GitHub](https://img.shields.io/github/license/minefuto/junos-exporter)
 
-
 ## Overview
 
-This is a prometheus exporter for Junos devices using [PyEZ](https://github.com/Juniper/py-junos-eznc) Tables and Views.  
-PyEZ Tables and Views allows you to extract operational information from Junos devices and map it to python objects using simple YAML definitions.  
-`junos-exporter` can convert the python objects created with PyEZ into prometheus metrics.  
-As a result, this exporter allows you to flexibly configure the metrics to be scraped using only YAML definitions.
+This exporter is designed to leverage the [PyEZ](https://github.com/Juniper/py-junos-eznc) framework to efficiently parse Junos device information into Prometheus metrics. By utilizing PyEZ Table and View, it seamlessly handles Junos-specific XML/RPC responses, ensuring accurate and structured data collection without the need for complex manual parsing. This architecture allows for high extensibility, making it simple to add custom metrics as your monitoring requirements evolve.
 
-The following configuration is required for Junos devices because PyEZ using netconf over ssh.
+To allow `junos-exporter` connectivity via NETCONF over SSH, ensure the following configuration is applied to your Junos devices.
 ```
 set system service netconf ssh
 ```
@@ -24,94 +20,65 @@ pip install junos-exporter
 ```
 
 ## Usage
-<details>
 
-<summary>Docker(Recommended)</summary>
+1. Setup the `config.yml`
 
-1. **Download `config.yml`**:
-   ```sh
-   curl -sO https://raw.githubusercontent.com/minefuto/junos-exporter/refs/heads/main/config.yml
-   ```
-
-2. **Edit `config.yml`**:
-   ```yaml
-   general:
-     prefix: junos  # Prefix for the metrics
-     timeout: 60    # Request timeout for the exporter
-
-   credentials:
-     default:
-       username: admin  # Junos device's username
-       password: admin@123  # Junos device's password
-   ```
-
-3. **Update prometheus configuration**:
-   ```yaml
-   scrape_configs:
-     - job_name: "junos-exporter"
-       static_configs:
-         - targets:
-             - "192.168.1.1"  # Target device
-       relabel_configs:
-         - source_labels: [__address__]
-           target_label: __param_target
-         - source_labels: [__param_target]
-           target_label: instance
-         - target_label: __address__
-           replacement: 127.0.0.1:9326
-   ```
-
-4. **Run the exporter using Docker**:
-   ```sh
-   docker run -v config.yml:/app/config.yml ghcr.io/minefuto/junos-exporter
-   ```
-</details>
-<details>
-
-<summary>Pip</summary>
-
-1. **Download `config.yml`**:
    ```sh
    curl -s -o ~/.junos-exporter/config.yml --create-dirs https://raw.githubusercontent.com/minefuto/junos-exporter/refs/heads/main/config.yml
    ```
 
-2. **Edit `config.yml`**:
+2. Configure the `config.yml`
+
    ```yaml
    general:
-     prefix: junos  # Prefix for the metrics
-     timeout: 60    # Request timeout for the exporter
-
+     prefix: junos          # Prefix prepended to all exported metric names
+     timeout: 60            # Total timeout for Junos RPC execution and data collection
+     timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection
+   
    credentials:
      default:
-       username: admin  # Junos device's username
-       password: admin@123  # Junos device's password
+       username: admin      # Junos device login username
+       password: admin@123  # Junos device login password
    ```
 
-3. **Update prometheus configuration**:
+3. Configure the Prometheus
+
    ```yaml
    scrape_configs:
      - job_name: "junos-exporter"
        static_configs:
          - targets:
              - "192.168.1.1"  # Target device
+             - "192.168.1.2,192.168.1.3"  # Multiple Target device such as dual RE
        relabel_configs:
          - source_labels: [__address__]
            target_label: __param_target
          - source_labels: [__param_target]
+           regex: '^([^,]+).*'
+           replacement: '$1'
            target_label: instance
          - target_label: __address__
            replacement: 127.0.0.1:9326
    ```
+   When multiple targets are provided in a comma-separated list, if the first target is unreachable, it proceeds to the next one in the sequence.
 
-4. **Run the exporter**:
+4. Run the exporter
+
    ```sh
    junos-exporter
    ```
-</details>
 
-## Options
+   For Docker users, use the following command
+   ```sh
+   docker run -d \
+     -p 9326:9326 \
+     -v /path/to/config.yml:/app/config.yml \
+     ghcr.io/minefuto/junos-exporter
+   ```
 
-`junos-exporter` has several `uvicorn` options:
+## CLI Options
+
+The `junos-exporter` is powered by the uvicorn ASGI server. You can customize the server's behavior using the following command-line options.
 
 ```
 usage: junos-exporter [-h] [--host HOST] [--log-level {critical,error,warning,info,debug,trace}]
@@ -131,32 +98,28 @@ options:
 
 ## Credentials
 
-This exporter allows you configure the authentication method per Junos device.  
-Add the module_name defined in the `credentials` section of `config.yml` to the query parameter when scraping.  
+This exporter allows you to configure specific authentication methods for each Junos device. To select a profile defined in the `credentials` section of your `config.yml`, add the credential query parameter to the scrape URL.  
 e.g. http://localhost:9326/metrics?credential=vjunos&target=192.168.10.12
-By setting `__params_credential` to `vjunos` in the prometheus configuration, `vjunos` credential will be used.
-
-If `credential` is not specified as a query parameter, predefined credential(`default`) is used when scraping.
-
 ```yaml
 credentials:
-  vjunos: # password authentication
+  default: # password authentication
     username: admin
     password: admin@123
 
-  vjunos_key: # public key authentication
+  vjunos: # public key authentication
     username: admin
     private_key: ~/.ssh/id_rsa
     private_key_passphrase: admin@123 # option
 ```
 
-
+In your Prometheus configuration, setting `__params_credential` to `vjunos` ensures the corresponding credentials are used.
+If the `credential` parameter is omitted, the `default` profile will be used.
 ```yaml
 scrape_configs:
   - job_name: "junos-exporter"
     static_configs:
       - targets:
-          - "192.168.1.1"  # Target device using default credential
+          - "192.168.1.1"  # Target device using "default" credential
       - targets:
           - "192.168.1.2"  # Target device using "vjunos" credential
         labels:
@@ -172,17 +135,16 @@ scrape_configs:
 
 ## Metrics
 
-This exporter allows you configure the metrics to be scraped per Junos device.  
-Add the module_name defined in the `modules` section of `config.yml` to the query parameter when scraping.  
+This exporter allows you to configure which metrics are scraped for each Junos device.
+To use a specific profile defined in the `modules` section of your `config.yml`, add the module query parameter to the scrape URL.  
 e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
-By setting `__params_module` to `router` in the prometheus configuration, `router` module will be used.
 
-If `module` is not specified as a query parameter, predefined module(`default`) is used when scraping.
-
+In your Prometheus configuration, setting `__params_module` to `router` ensures the corresponding modules are used.
+If the `module` parameter is omitted, the `default` profile will be used.
 
 ### Predefined Metrics
 
-A module named `default` is predefined, providing metrics such as:
+A module named `default` is predefined in `config.yml`, providing metrics such as:
 
 - alarm information from `show system alarm/show chassis alarm`
 - fpc status and cpu/memory utilization from `show chassis fpc`
@@ -190,7 +152,7 @@ A module named `default` is predefined, providing metrics such as:
 - routing engine status and cpu/memory utilization from `show chassis routing-engine`
 - storage utilization from `show system storage`
 - interface status/error/drop/statistics from `show interface extensive`
-- interface tx/rx power from `show interface diatnostics optics`
+- interface tx/rx power from `show interface diagnostics optics`
 - lldp status from `show lldp neighbor`
 - lacp status from `show lacp interface`
 - route count from `show route summary`
@@ -200,24 +162,19 @@ A module named `default` is predefined, providing metrics such as:
 - vrrp status from `show vrrp`
 - bfd status from `show bfd session`
 
-
 ### Custom Metrics
 
-You can extract python objects from any command on Junos device and convert it into prometheus metrics by defining YAML configurations.  
-Here is an example to create custom metrics using the `show interface extensive` command output.
+You can define custom metrics by mapping Python objects extracted via Junos RPC commands to Prometheus metrics. This is done using YAML configurations in three steps.
 
-1. **Define PyEZ Tables and Views**
+1. Define PyEZ Tables and Views
 
-   Place the YAML file for PyEZ Tables and Views in the following directories:
-
-   - PyEZ structured & unstructured tables and views configuration files:
-     - Docker: `/app/op/`
-     - Pip: `~/.junos-exporter/op/`
-   - TextFSM template files:
-     - Docker: `/app/textfsm/`
-     - Pip: `~/.junos-exporter/textfsm/`
-
-   Below is the mapping information from the `show interface extensive` command to python objects:
+   First, create YAML definitions to map Junos RPC outputs to Python objects. Place your YAML and TextFSM files in the designated directories.
+   | Environment | PyEZ Tables Path        | TextFSM Template Path       |
+   |:---         |:---                     |:---                         |
+   |pip(local)   | `~/.junos-exporter/op/` | `~/.junos-exporter/textfsm` |
+   |docker       | `/app/op/`              | `/app/textfsm/`             |
+   
+   Example PyEZ definition(`show interface extensive`)
    ```yaml
    PhysicalInterfaceStatus:
      rpc: get-interface-information
@@ -227,7 +184,7 @@ Here is an example to create custom metrics using the `show interface extensive`
      key: name
      item: physical-interface
      view: PhysicalInterfaceStatusView
-
+   
    PhysicalInterfaceStatusView:
      groups:
        traffic_statistics: traffic-statistics
@@ -272,20 +229,19 @@ Here is an example to create custom metrics using the `show interface extensive`
        bit_error_seconds: bit-error-seconds
        errored_blocks_seconds: errored-blocks-seconds
    ```
-
-   Refer to Juniper's documentation for more details:
+   
+   For more details, please refer to the Juniper documentation at the following paths:
    - [Parsing Structured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/task/junos-pyez-tables-op-defining.html)
    - [Parsing Unstructured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/topic-map/junos-pyez-tables-op-unstructured-output-defining.html)
      - [Using TextFSM Templates](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-using-textfsm-templates.html)
+   
+   Currently Unsupported Features:
+   - The `target` parameter for Parsing Unstructured Output.
+   - Parsing nested table, such as [PyEZ LacpPortTable](https://github.com/Juniper/py-junos-eznc/blob/master/lib/jnpr/junos/op/lacp.yml)
 
-   **Currently unsupported features:**
-   - Parsing unstructured output for `Target FPC`
-   - Nested table definitions, such as [PyEZ LacpPortTable](https://github.com/Juniper/py-junos-eznc/blob/master/lib/jnpr/junos/op/lacp.yml)
+2. Map Python Objects to Prometheus Metrics
 
-
-2. **Map python objects to metrics**
-
-   Edit the `optables` section in `config.yml`:
+   Once your PyEZ tables are defined, register them in the `optables` section of your `config.yml`.
    ```yaml
    optables:
      PhysicalInterfaceStatus:  # PyEZ table name
@@ -294,7 +250,7 @@ Here is an example to create custom metrics using the `show interface extensive`
            value: speed           # Metric value
            type: gauge            # Metric type (gauge, count, or untyped)
            help: Speed of show interfaces extensive  # Metric description
-           value_transform:       # (Optional) Transform string values into floats
+           value_transform:       # (Optional) Transform string values into numeric data
              100mbps: 100000000
              1000mbps: 1000000000
              1Gbps: 1000000000
@@ -309,11 +265,10 @@ Here is an example to create custom metrics using the `show interface extensive`
        labels:
          - name: interface  # (Optional) Label name
            value: name      # Label value
-         - name: description
-           value: description
+         - value: description
    ```
-
-   With the above configuration, the following metrics can be scraped:
+   
+   With this configuration, the following metrics will be available for scraping.
    ```
    # HELP junos_interface_speed Speed of show interfaces extensive
    # TYPE junos_interface_speed gauge
@@ -323,77 +278,17 @@ Here is an example to create custom metrics using the `show interface extensive`
    # TYPE junos_interface_lastflap_seconds_total counter
    junos_interface_lastflap_seconds_total{interface="ge-0/0/0",description="description example"} 1745734677000.0
    ```
+   
+3. Create a Module
 
-   **Additional Notes:**
-   - PyEZ Table key are automatically mapped to `key` and `name` and can be used in `metrics value` or `label value`.
-     - op/tables.yml
-       ```yaml
-       RoutingEngineStatus:
-         rpc: get-route-engine-information
-         item: route-engine
-         key: slot  <- !!
-         view: RoutingEngineStatusView
-       ```
-     - config.yml
-       ```yaml
-         RoutingEngineStatus:
-           metrics:
-           -snip-
-           labels:
-             - name: slot
-               value: key
-       ```
-   - If there are multiple keys, they will be assigned as `key.0`, `key.1`, etc.
-     - op/tables.yml
-     ```yaml
-     LldpStatus:
-       rpc: get-lldp-neighbors-information
-       item: lldp-neighbor-information
-       key:
-         - lldp-local-port-id   # key.0, name.0
-         - lldp-remote-port-id  # key.1, name.1
-       view: LldpStatusView
-     ```
-
-     - config.yml
-     ```yaml
-     LldpStatus:
-       metrics:
-         - name: lldp_neighbor_info
-           value: 1
-           type: gauge
-           help: Information of show lldp neighbor
-       labels:
-         - name: remote
-           value: remote_system_name
-         - name: interface
-           value: key.0
-         - name: remote_interface
-           value: key.1
-     ```
-
-   - You can assign fixed values for the metric:
-     - config.yml
-     ```yaml
-       HardwareStatus:
-         metrics:
-           - name: hardware_info
-             value: 1  <- !!
-             type: gauge
-             help: Information of show chassis hardware
-     ```
-
-3. **Create a Module**
-
-   Add the table name to the `modules` section in `config.yml`:
+   Once your tables are defined and mapped, group them into a `modules` section in `config.yml`. This allows you to apply specific sets of metrics to different devices.
    ```yaml
    modules:
      router:
        tables:
          - PhysicalInterfaceStatus
    ```
-
-   Update prometheus configuration to use the new module:
+   Update your Prometheus configuration to instruct the exporter to use your new module by setting the `__params_module` label.
    ```yaml
    scrape_configs:
      - job_name: "junos-exporter"
@@ -411,6 +306,61 @@ Here is an example to create custom metrics using the `show interface extensive`
          - target_label: __address__
            replacement: 127.0.0.1:9326
    ```
+
+### Additional Note on Metric Mapping
+   
+   Automatic Key Mapping
+   - The key defined in your PyEZ Table is automatically mapped to `key` or `name`. You can use these values directly in your `metrics` or `labels` configuration.
+   
+   - PyEZ Definition(`op/tables.yml`)
+     ```yaml
+     RoutingEngineStatus:
+       rpc: get-route-engine-information
+       item: route-engine
+       key: slot  # This becomes 'key'
+       view: RoutingEngineStatusView
+     ```
+   
+   - Exporter Config(`config.yml`)
+     ```yaml
+     RoutingEngineStatus:
+       labels:
+         - name: slot
+           value: key  # References the 'slot' from the PyEZ table
+     ```
+   
+   Handling Multiple Keys
+   - If a PyEZ Table defines multiple keys (composite keys), they are assigned sequentially as key.0, key.1, etc.
+   
+   - PyEZ Definition(`op/tables.yml`)
+     ```yaml
+     LldpStatus:
+       rpc: get-lldp-neighbors-information
+       key:
+         - lldp-local-port-id   # Assigned to key.0
+         - lldp-remote-port-id  # Assigned to key.1
+     ```
+   
+   - Exporter Config(`config.yml`)
+     ```yaml
+     LldpStatus:
+       labels:
+         - name: interface
+           value: key.0
+         - name: remote_interface
+           value: key.1
+     ```
+   
+   Constant Metric Values
+   - You can assign a fixed numeric value to a metric. This is particularly useful for creating "Information" metrics that primarily provide metadata through labels.
+     ```yaml
+     HardwareStatus:
+       metrics:
+         - name: hardware_info
+           value: 1  # Sets a constant value of 1.0
+           type: gauge
+           help: Information from 'show chassis hardware'
+     ```
 
 ## License
 
