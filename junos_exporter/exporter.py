@@ -4,8 +4,9 @@ from math import isfinite, isnan
 
 from fastapi import HTTPException, status
 
-from junos_exporter.config import Config, Label, Metric, logger
+from junos_exporter.config import Config, Label, Metric, Table, logger
 from junos_exporter.connector import Connector
+from junos_exporter.parser import Parser
 
 
 class MetricConverter:
@@ -167,34 +168,46 @@ class MetricConverter:
         return "".join(exposition)
 
 
-class Exporter:
+class TableCollector:
     def __init__(
-        self, converter: dict[str, list[MetricConverter]], prefix: str
+        self, name: str, table: Table, converters: list[MetricConverter]
     ) -> None:
-        self.converter = converter
+        self.name = name
+        self.table = table
+        self.parser = Parser(table)
+        self.converters = converters
+
+
+class Exporter:
+    def __init__(self, collectors: list[TableCollector], prefix: str) -> None:
+        self.collectors = collectors
         self.prefix = prefix
 
     async def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
         up_status: int = 1
-        for name, metrics in self.converter.items():
-            items = await connector.collect(name)
-            if items is None:
+        for collector in self.collectors:
+            xml = await connector.get(collector.name, collector.table)
+            if xml is None:
                 up_status = 0
                 continue
 
+            logger.debug(
+                f"Start to parse rpc reply(Target: {connector.target}, Table: {collector.name})"
+            )
+            items = collector.parser.parse(xml)
+            logger.debug(
+                f"Completed to parse rpc reply(Target: {connector.target}, Table: {collector.name}, Records: {len(items)})"
+            )
+
             if not items:
                 logger.debug(
-                    f"Table items are empty(Target: {connector.target}, Table: {name})"
+                    f"Table items are empty(Target: {connector.target}, Table: {collector.name})"
                 )
                 continue
 
-            logger.debug(
-                f"Start to convert table items(Target: {connector.target}, Table: {name})"
-            )
-            exposition.append("\n".join([metric.convert(items) for metric in metrics]))
-            logger.debug(
-                f"Completed to convert table items(Target: {connector.target}, Table: {name})"
+            exposition.append(
+                "\n".join([c.convert(items) for c in collector.converters])
             )
 
         exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")
@@ -205,7 +218,7 @@ class Exporter:
 
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
-        self.converters = {}
+        self.collectors: dict[str, list[TableCollector]] = {}
         self.prefix = config.prefix
         unixtime_regex: dict[str, re.Pattern] = {
             "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
@@ -215,24 +228,28 @@ class ExporterBuilder:
         }
 
         for name, module in config.modules.items():
-            converter = {}
-            for table in module.tables:
-                converter[table] = [
-                    MetricConverter(
-                        metric,
-                        labels=config.optables[table].labels,
-                        prefix=self.prefix,
-                        unixtime_regex=unixtime_regex,
-                    )
-                    for metric in config.optables[table].metrics
-                ]
-            self.converters[name] = converter
+            self.collectors[name] = [
+                TableCollector(
+                    table,
+                    config.tables[table],
+                    [
+                        MetricConverter(
+                            metric,
+                            labels=config.tables[table].labels,
+                            prefix=self.prefix,
+                            unixtime_regex=unixtime_regex,
+                        )
+                        for metric in config.tables[table].metrics
+                    ],
+                )
+                for table in module.tables
+            ]
 
     def build(self, module_name: str) -> Exporter:
-        if module_name not in self.converters:
+        if module_name not in self.collectors:
             logger.error(f"Module is not defined(Module: {module_name})")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Module is not defined(Module: {module_name})",
             )
-        return Exporter(self.converters[module_name], self.prefix)
+        return Exporter(self.collectors[module_name], self.prefix)

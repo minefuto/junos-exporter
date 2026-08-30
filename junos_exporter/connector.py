@@ -1,25 +1,15 @@
-import os
 import re
 import socket
-from glob import glob
-from importlib.resources import files
 from types import TracebackType
 
-import yaml
 from asyncssh.pbe import KeyEncryptionError
 from asyncssh.public_key import KeyImportError
 from fastapi import HTTPException, status
-from jnpr.junos.factory import loadyaml
-from jnpr.junos.factory.cmdtable import CMDTable
-from jnpr.junos.factory.optable import OpTable
-from jnpr.junos.factory.state_machine import StateMachine
-from jnpr.junos.jxml import remove_namespaces_and_spaces
 from lxml import etree
 from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
 from scrapli_netconf import AsyncNetconfDriver
-from textfsm.parser import TextFSMTemplateError
 
-from junos_exporter.config import Config, Credential, logger
+from junos_exporter.config import Config, Credential, Table, logger
 
 
 class RpcError(Exception):
@@ -36,7 +26,6 @@ class Connector:
         target: str,
         backup_connections: list[str],
         credential: Credential,
-        textfsm_dir: str | None,
         ssh_config: str | None,
         timeout_socket: int,
     ) -> None:
@@ -64,7 +53,6 @@ class Connector:
             transport_options=transport_options,
             timeout_socket=timeout_socket,
         )
-        self.textfsm_dir: str | None = textfsm_dir
 
     async def open(self) -> "None":
         try:
@@ -152,162 +140,33 @@ class Connector:
         else:
             raise RpcError("unknown rpc error")
 
-    async def _get(self, name: str) -> OpTable | CMDTable | None:
-        if not globals().get(name):
+    async def get(self, name: str, table: Table) -> str | None:
+        """Sends the table's rpc and returns the reply element as a string."""
+        rpc = etree.Element(table.rpc, format="xml-minified")
+        for arg, value in table.args.items():
+            element = etree.SubElement(rpc, arg.replace("_", "-"))
+            if value is not True:
+                element.text = str(value)
+
+        logger.debug(f"Start to get rpc reply(Target: {self.target}, Table: {name})")
+        try:
+            reply = await self._get_rpc(etree.tostring(rpc).decode())
+        except RpcError as err:
             logger.error(
-                f"Could not get table items(Target: {self.target}, Table: {name}, Error: OpTable is not defined)"
+                f"Could not get rpc reply(Target: {self.target}, Table: {name}, RpcError: {err})"
             )
-            return None
-
-        if issubclass(globals()[name], OpTable):
-            table = globals()[name]()
-
-            xml_rpc = etree.Element(table.GET_RPC, format="xml-minified")
-            for k, v in table.GET_ARGS.items():
-                if v is True:
-                    etree.SubElement(xml_rpc, k)
-                else:
-                    etree.SubElement(xml_rpc, k.replace("_", "-")).text = v
-            filter_ = etree.tostring(xml_rpc).decode()
-            try:
-                rpc = await self._get_rpc(filter_)
-                table.xml = remove_namespaces_and_spaces(rpc)
-                return table
-            except RpcError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
-                )
-                return None
-
-        elif issubclass(globals()[name], CMDTable):
-            if self.textfsm_dir is None:
-                table = globals()[name]()
-            else:
-                table = globals()[name](template_dir=self.textfsm_dir)
-
-            filter_ = (
-                f'<command format="text">{table.GET_CMD} | display xml rpc</command>'
-            )
-            try:
-                command = await self._get_rpc(filter_)
-                command[0].set("format", "text")
-                rpc_command = etree.tostring(command[0]).decode()
-
-                rpc = await self._get_rpc(rpc_command)
-                table.data = rpc.text
-                if table.USE_TEXTFSM:
-                    table.output = table._parse_textfsm(
-                        platform=table.PLATFORM, command=table.GET_CMD, raw=rpc.text
-                    )
-                else:
-                    sm = StateMachine(table)
-                    table.output = sm.parse(rpc.text.splitlines())
-                return table
-            except TextFSMTemplateError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, TextFSMTemplateError: {err})"
-                )
-                return None
-            except RpcError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
-                )
-                return None
-        else:
-            raise NotImplementedError
-
-    async def collect(self, name: str) -> list[dict] | None:
-        logger.debug(f"Start to get table items(Target: {self.target}, Table: {name})")
-        table = await self._get(name)
-        if table is None:
             return None
         logger.debug(
-            f"Completed to get table items(Target: {self.target}, Table: {name})"
+            f"Completed to get rpc reply(Target: {self.target}, Table: {name})"
         )
-
-        items = []
-        if isinstance(table, OpTable):
-            for t in table:
-                item = {}
-                try:
-                    if type(t.key) is tuple:
-                        for i, n in enumerate(t.key):
-                            item[f"key.{i}"] = n
-                            item[f"name.{i}"] = n
-                    else:
-                        item["key"] = t.key
-                        item["name"] = t.key
-                except ValueError:
-                    # key is not defined
-                    pass
-
-                for k, v in t.items():
-                    item[k] = v
-                items.append(item)
-        elif isinstance(table, CMDTable):
-            for t in table:
-                key, table = t
-                item = {}
-                if type(key) is tuple:
-                    for i, n in enumerate(key):
-                        item[f"key.{i}"] = n
-                        item[f"name.{i}"] = n
-                else:
-                    item["key"] = key
-                    item["name"] = key
-
-                for k, v in table.items():
-                    item[k] = v
-                items.append(item)
-        else:
-            raise NotImplementedError
-
-        return items
-
-    async def debug(self, name: str) -> list[dict] | None:
-        if globals().get(name):
-            table = await self._get(name)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"OpTable is not defined(OpTable: {name}",
-            )
-        if table is None:
-            return None
-        return table.to_json()
+        return etree.tostring(reply).decode()
 
 
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
-        self.optabels_dir: str | None = None
-        if os.path.isdir(os.path.expanduser("~/.junos-exporter/op")):
-            self.optables_dir = os.path.expanduser("~/.junos-exporter/op")
-        elif os.path.isdir("./op"):
-            self.optables_dir = "./op"
-        else:
-            self.optables_dir = str(files("junos_exporter").joinpath("op"))
-
-        self.textfsm_dir: str | None = None
-        if os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
-            self.textfsm_dir = os.path.abspath(
-                os.path.expanduser("~/.junos-exporter/textfsm")
-            )
-        elif os.path.isdir("./textfsm"):
-            self.textfsm_dir = os.path.abspath("./textfsm")
-        else:
-            self.optables_dir = str(files("junos_exporter").joinpath("textfsm"))
-
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
         self.timeout_socket: int = config.timeout_socket
-        self._load_optables()
-
-    def _load_optables(self) -> None:
-        if self.optables_dir is None:
-            return
-        for yml in glob(f"{self.optables_dir}/*"):
-            if re.match(r".+\.(yml|yaml)$", yml):
-                globals().update(loadyaml(yaml.safe_load(yml)))
 
     def build(self, target_text: str, credential_name: str) -> Connector:
         targets = target_text.split(",")
@@ -330,7 +189,6 @@ class ConnecterBuilder:
             target=target,
             backup_connections=backup_connections,
             credential=self.credentials[credential_name],
-            textfsm_dir=self.textfsm_dir,
             ssh_config=self.ssh_config,
             timeout_socket=self.timeout_socket,
         )

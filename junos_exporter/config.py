@@ -47,12 +47,12 @@ class Module(BaseModel):
 
     @field_validator("tables", mode="before")
     @classmethod
-    def check_exist_optables(cls, tables: list[str], info: ValidationInfo) -> list[str]:
+    def check_exist_tables(cls, tables: list[str], info: ValidationInfo) -> list[str]:
         if isinstance(info.context, dict):
-            optables = info.context.get("optables", dict())
+            defined = info.context.get("tables", dict())
             for table in tables:
-                if table not in optables:
-                    raise ValueError(f"table({table}) does not contain optables")
+                if table not in defined:
+                    raise ValueError(f"table({table}) does not contain tables")
         return tables
 
 
@@ -103,9 +103,36 @@ class Metric(BaseModel):
         return defaultdict(lambda: float("NaN"), value_transform)
 
 
-class OpTable(BaseModel):
-    metrics: list[Metric]
-    labels: list[Label]
+class FieldSpec(BaseModel):
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    path: str
+    exists: bool = False
+
+
+class Table(BaseModel):
+    rpc: str
+    args: dict[str, str | bool] = Field(default_factory=dict)
+    container: str = ""
+    item: list[str]
+    recursive: bool = False
+    fields_: dict[str, list[FieldSpec]] = Field(default_factory=dict, alias="fields")
+    metrics: list[Metric] = Field(default_factory=list)
+    labels: list[Label] = Field(default_factory=list)
+
+    @field_validator("item", mode="before")
+    @classmethod
+    def to_list(cls, item: str | list[str]) -> list[str]:
+        return [item] if isinstance(item, str) else item
+
+    @field_validator("fields_", mode="before")
+    @classmethod
+    def to_specs(cls, fields: dict) -> dict:
+        specs = {}
+        for name, spec in fields.items():
+            candidates = [spec] if isinstance(spec, str | dict) else spec
+            specs[name] = [{"path": c} if isinstance(c, str) else c for c in candidates]
+        return specs
 
 
 class Config:
@@ -132,20 +159,14 @@ class Config:
 
         self.general = General(**config["general"])
         self.credentials = {
-            name: Credential.model_validate(
-                credential, context={"optables": config["optables"]}
-            )
+            name: Credential.model_validate(credential)
             for name, credential in config["credentials"].items()
         }
         self.modules = {
-            name: Module.model_validate(
-                module, context={"optables": config["optables"]}
-            )
+            name: Module.model_validate(module, context={"tables": config["tables"]})
             for name, module in config["modules"].items()
         }
-        self.optables = {
-            name: OpTable(**optable) for name, optable in config["optables"].items()
-        }
+        self.tables = {name: Table(**table) for name, table in config["tables"].items()}
 
     @property
     def prefix(self) -> str:

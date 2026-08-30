@@ -6,7 +6,7 @@
 
 ## Overview
 
-This exporter is designed to leverage the [PyEZ](https://github.com/Juniper/py-junos-eznc) framework to efficiently parse Junos device information into Prometheus metrics. By utilizing PyEZ Table and View, it seamlessly handles Junos-specific XML/RPC responses, ensuring accurate and structured data collection without the need for complex manual parsing. This architecture allows for high extensibility, making it simple to add custom metrics as your monitoring requirements evolve.
+This exporter turns Junos device information into Prometheus metrics. It collects NETCONF RPC replies and parses them with [pygxml](https://github.com/minefuto/pygxml), a streaming XML parser with gjson-style path queries. Everything about a metric -- which RPC to send, how to read records out of the reply, and how to expose them -- is declared in `config.yml`, so adding a metric never requires writing code.
 
 To allow `junos-exporter` connectivity via NETCONF over SSH, ensure the following configuration is applied to your Junos devices.
 ```
@@ -34,6 +34,7 @@ pip install junos-exporter
      prefix: junos          # Prefix prepended to all exported metric names
      timeout: 60            # Total timeout for Junos RPC execution and data collection
      timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection
+     # ssh_config: ~/.ssh/config  # SSH config for the NETCONF connection, e.g. to reach devices via a jump host
    
    credentials:
      default:
@@ -135,6 +136,8 @@ scrape_configs:
 
 ## Metrics
 
+### Selecting a module
+
 This exporter allows you to configure which metrics are scraped for each Junos device.
 To use a specific profile defined in the `modules` section of your `config.yml`, add the module query parameter to the scrape URL.  
 e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
@@ -142,225 +145,197 @@ e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
 In your Prometheus configuration, setting `__params_module` to `router` ensures the corresponding modules are used.
 If the `module` parameter is omitted, the `default` profile will be used.
 
-### Predefined Metrics
+### Bundled tables
 
-A module named `default` is predefined in `config.yml`, providing metrics such as:
+The bundled `config.yml` defines 20 tables covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module.
 
-- alarm information from `show system alarm/show chassis alarm`
-- fpc status and cpu/memory utilization from `show chassis fpc`
-- module information/status from `show chassis hardware/show chassis environment`
-- routing engine status and cpu/memory utilization from `show chassis routing-engine`
-- storage utilization from `show system storage`
-- interface status/error/drop/statistics from `show interface extensive`
-- interface tx/rx power from `show interface diagnostics optics`
-- lldp status from `show lldp neighbor`
-- lacp status from `show lacp interface`
-- route count from `show route summary`
-- arp information from `show arp expiration-time`
-- ospf status/cost from `show ospf neighbor extensive/show ospf interface`
-- bgp status/prefix count from `show bgp summary`
-- vrrp status from `show vrrp`
-- bfd status from `show bfd session`
+| table | rpc | command |
+| --- | --- | --- |
+| `SystemAlarmStatus` | `get-system-alarm-information` | `show system alarms` |
+| `ChassisAlarmStatus` | `get-alarm-information` | `show chassis alarms` |
+| `FpcStatus` | `get-fpc-information` | `show chassis fpc` |
+| `HardwareStatus` | `get-chassis-inventory` | `show chassis hardware` |
+| `EnvironmentStatus` | `get-environment-information` | `show chassis environment` |
+| `RoutingEngineStatus` | `get-route-engine-information` | `show chassis routing-engine` |
+| `StorageStatus` | `get-system-storage` | `show system storage` |
+| `PhysicalInterfaceStatus` | `get-interface-information` | `show interfaces extensive` |
+| `LogicalInterfaceStatus` | `get-interface-information` | `show interfaces detail` |
+| `InterfaceOpticStatus` | `get-interface-optics-diagnostics-information` | `show interfaces diagnostics optics` |
+| `LldpStatus` | `get-lldp-neighbors-information` | `show lldp neighbors` |
+| `LacpStatus` | `get-lacp-interface-information` | `show lacp interfaces` |
+| `RouteStatus` | `get-route-summary-information` | `show route summary` |
+| `ArpStatus` | `get-arp-table-information` | `show arp expiration-time` |
+| `OspfInterfaceStatus` | `get-ospf-interface-information` | `show ospf interface detail` |
+| `OspfNeighborStatus` | `get-ospf-neighbor-information` | `show ospf neighbor extensive` |
+| `BgpStatus` | `get-bgp-summary-information` | `show bgp summary` |
+| `BgpRouteStatus` | `get-bgp-summary-information` | `show bgp summary` |
+| `VrrpStatus` | `get-vrrp-information` | `show vrrp` |
+| `BfdStatus` | `get-bfd-session-information` | `show bfd session` |
 
-### Custom Metrics
 
-You can define custom metrics by mapping Python objects extracted via Junos RPC commands to Prometheus metrics. This is done using YAML configurations in three steps.
+### Defining a table
 
-1. Define PyEZ Tables and Views
+A table is one RPC plus the rules for reading its reply. The reply XML is scanned into **records** (a flat `name -> value` mapping), and each record becomes one metric sample.
 
-   First, create YAML definitions to map Junos RPC outputs to Python objects. Place your YAML and TextFSM files in the designated directories.
-   | Environment | PyEZ Tables Path        | TextFSM Template Path       |
-   |:---         |:---                     |:---                         |
-   |pip(local)   | `~/.junos-exporter/op/` | `~/.junos-exporter/textfsm` |
-   |docker       | `/app/op/`              | `/app/textfsm/`             |
-   
-   Example PyEZ definition(`show interface extensive`)
-   ```yaml
-   PhysicalInterfaceStatus:
-     rpc: get-interface-information
-     args:
-       extensive: True
-       interface_name: '[afgxe][et]-*'
-     key: name
-     item: physical-interface
-     view: PhysicalInterfaceStatusView
-   
-   PhysicalInterfaceStatusView:
-     groups:
-       traffic_statistics: traffic-statistics
-       input_error_list: input-error-list
-       output_error_list: output-error-list
-       ethernet_pcs_statistics: ethernet-pcs-statistics
-     fields:
-       oper_status: oper-status
-       admin_status: admin-status
-       description: description
-       speed: speed
-       mtu: mtu
-       link_mode: link-mode
-       interface_flapped: interface-flapped
-     fields_traffic_statistics:
-       input_bytes: input-bytes
-       input_packets: input-packets
-       output_bytes: output-bytes
-       output_packets: output-packets
-     fields_input_error_list:
-       input_errors: input-errors
-       input_drops: input-drops
-       framing_errors: framing-errors
-       input_runts: input-runts
-       input_discards: input-discards
-       input_l3_incompletes: input-l3-incompletes
-       input_l2_channel_errors: input-l2-channel-errors
-       input_l2_mismatch_timeouts: input-l2-mismatch-timeouts
-       input_fifo_errors: input-fifo-errors
-       input_resource_errors: input-resource-errors
-     fields_output_error_list:
-       carrier_transitions: carrier-transitions
-       output_errors: output-errors
-       output_drops: output-drops
-       collisions: output-collisions
-       aged_packets: aged-packets
-       mtu_errors: mtu-errors
-       hs_link_crc_errors: hs-link-crc-errors
-       output_fifo_errors: output-fifo-errors
-       output_resource_errors: output-resource-errors
-     fields_ethernet_pcs_statistics:
-       bit_error_seconds: bit-error-seconds
-       errored_blocks_seconds: errored-blocks-seconds
-   ```
-   
-   For more details, please refer to the Juniper documentation at the following paths:
-   - [Parsing Structured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/task/junos-pyez-tables-op-defining.html)
-   - [Parsing Unstructured Output](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/topic-map/junos-pyez-tables-op-unstructured-output-defining.html)
-     - [Using TextFSM Templates](https://www.juniper.net/documentation/us/en/software/junos-pyez/junos-pyez-developer/topics/concept/junos-pyez-tables-op-using-textfsm-templates.html)
-   
-   Currently Unsupported Features:
-   - The `target` parameter for Parsing Unstructured Output.
-   - Parsing nested table, such as [PyEZ LacpPortTable](https://github.com/Juniper/py-junos-eznc/blob/master/lib/jnpr/junos/op/lacp.yml)
+Records are cut out of the reply like this:
 
-2. Map Python Objects to Prometheus Metrics
+- Each element matching `container` is a starting point, and `item` marks where a record **begins**. Junos often emits records without a wrapping element, so a record is not necessarily the subtree of the `item` element.
+- Every entry in `fields` is looked up in three places and the **first hit wins**: **(a)** inside the `item` element, **(b)** among the siblings that follow it, up to the next `item`, **(c)** among the ancestor's children that appeared before that `item` -- which is how a parent's values are inherited by its records.
+- A field that resolves nowhere is simply left out of the record.
 
-   Once your PyEZ tables are defined, register them in the `optables` section of your `config.yml`.
-   ```yaml
-   optables:
-     PhysicalInterfaceStatus:  # PyEZ table name
-       metrics:
-         - name: interface_speed  # Metric name
-           value: speed           # Metric value
-           type: gauge            # Metric type (gauge, count, or untyped)
-           help: Speed of show interfaces extensive  # Metric description
-           value_transform:       # (Optional) Transform string values into numeric data
-             100mbps: 100000000
-             1000mbps: 1000000000
-             1Gbps: 1000000000
-             10Gbps: 10000000000
-             100Gbps: 100000000000
-             _: 0  # (Optional) Fallback value for unknown strings (default: NaN)
-         - name: interface_lastflap_seconds
-           value: interface_flapped
-           type: counter
-           help: Last flapped of show interfaces extensive
-           to_unixtime: True  # Convert timestamps to Unix time
-       labels:
-         - name: interface  # (Optional) Label name
-           value: name      # Label value
-         - value: description
-   ```
-   
-   With this configuration, the following metrics will be available for scraping.
-   ```
-   # HELP junos_interface_speed Speed of show interfaces extensive
-   # TYPE junos_interface_speed gauge
-   junos_interface_speed{interface="ge-0/0/0",description="description example"} 1000000000.0
-   
-   # HELP junos_interface_lastflap_seconds_total Last flapped of show interfaces extensive
-   # TYPE junos_interface_lastflap_seconds_total counter
-   junos_interface_lastflap_seconds_total{interface="ge-0/0/0",description="description example"} 1745734677000.0
-   ```
-   
-3. Create a Module
+For example, `show vrrp` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead:
 
-   Once your tables are defined and mapped, group them into a `modules` section in `config.yml`. This allows you to apply specific sets of metrics to different devices.
-   ```yaml
-   modules:
-     router:
-       tables:
-         - PhysicalInterfaceStatus
-   ```
-   Update your Prometheus configuration to instruct the exporter to use your new module by setting the `__params_module` label.
-   ```yaml
-   scrape_configs:
-     - job_name: "junos-exporter"
-       static_configs:
-         - targets:
-             - "192.168.1.1"  # Target device
-             - "192.168.1.2"
-           labels:
-             __params_module: "router"
-       relabel_configs:
-         - source_labels: [__address__]
-           target_label: __param_target
-         - source_labels: [__param_target]
-           target_label: instance
-         - target_label: __address__
-           replacement: 127.0.0.1:9326
-   ```
+```xml
+<vrrp-information>
+  <vrrp-interface>
+    <vrrp-vlan>
+      <physical-interface>xe-0/0/0</physical-interface>
+      <unit>1</unit>
+    </vrrp-vlan>
+    <interface-state>up</interface-state>
+    <group>10</group>
+    <vrrp-state>master</vrrp-state>
+    <vrrp-mode>active</vrrp-mode>
+    <vrrp-vlan>
+      <physical-interface>xe-0/0/0</physical-interface>
+      <unit>2</unit>
+    </vrrp-vlan>
+    <interface-state>up</interface-state>
+    <group>20</group>
+    <vrrp-state>master</vrrp-state>
+    <active-inherit>
+      <vrrp-mode>inherit</vrrp-mode>
+    </active-inherit>
+  </vrrp-interface>
+</vrrp-information>
+```
 
-### Additional Note on Metric Mapping
-   
-   Automatic Key Mapping
-   - The key defined in your PyEZ Table is automatically mapped to `key` or `name`. You can use these values directly in your `metrics` or `labels` configuration.
-   
-   - PyEZ Definition(`op/tables.yml`)
-     ```yaml
-     RoutingEngineStatus:
-       rpc: get-route-engine-information
-       item: route-engine
-       key: slot  # This becomes 'key'
-       view: RoutingEngineStatusView
-     ```
-   
-   - Exporter Config(`config.yml`)
-     ```yaml
-     RoutingEngineStatus:
-       labels:
-         - name: slot
-           value: key  # References the 'slot' from the PyEZ table
-     ```
-   
-   Handling Multiple Keys
-   - If a PyEZ Table defines multiple keys (composite keys), they are assigned sequentially as key.0, key.1, etc.
-   
-   - PyEZ Definition(`op/tables.yml`)
-     ```yaml
-     LldpStatus:
-       rpc: get-lldp-neighbors-information
-       key:
-         - lldp-local-port-id   # Assigned to key.0
-         - lldp-remote-port-id  # Assigned to key.1
-     ```
-   
-   - Exporter Config(`config.yml`)
-     ```yaml
-     LldpStatus:
-       labels:
-         - name: interface
-           value: key.0
-         - name: remote_interface
-           value: key.1
-     ```
-   
-   Constant Metric Values
-   - You can assign a fixed numeric value to a metric. This is particularly useful for creating "Information" metrics that primarily provide metadata through labels.
-     ```yaml
-     HardwareStatus:
-       metrics:
-         - name: hardware_info
-           value: 1  # Sets a constant value of 1.0
-           type: gauge
-           help: Information from 'show chassis hardware'
-     ```
+The bundled `VrrpStatus` table reads it as follows. `physical_interface` and `unit` are found by rule (a), the rest by rule (b), and `vrrp_mode` lists two paths so that the second record falls back to the nested one.
+
+```yaml
+tables:
+  VrrpStatus:
+    rpc: get-vrrp-information
+    container: vrrp-interface
+    item: vrrp-vlan
+    fields:
+      physical_interface: physical-interface
+      unit: unit
+      interface_state: interface-state
+      group: group
+      vrrp_state: vrrp-state
+      vrrp_mode:
+        - vrrp-mode
+        - active-inherit.vrrp-mode
+    metrics:
+      - name: vrrp_state
+        value: vrrp_state
+        type: gauge
+        help: "VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
+        value_transform:
+          "master": 5
+          "backup": 4
+          "transition": 3
+          "bringup": 2
+          "init": 1
+          "idle": 0
+    labels:
+      - name: interface
+        value: physical_interface
+      - value: unit
+      - name: mode
+        value: vrrp_mode
+      - value: group
+```
+
+Which is exposed as:
+
+```
+# HELP junos_vrrp_state VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)
+# TYPE junos_vrrp_state gauge
+junos_vrrp_state{interface="xe-0/0/0",unit="1",mode="active",group="10"} 5.0
+junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
+```
+
+#### tables
+
+| key | type | default | description |
+| --- | --- | --- | --- |
+| `rpc` | str | required | RPC name, sent as `<rpc-name format="xml-minified">` |
+| `args` | dict | `{}` | RPC arguments. `_` in a key becomes `-`. A value of `true` emits an empty element, anything else emits `<key>value</key>` |
+| `container` | str | `""` | Path to the parent of the records, `.` separated and relative to the child level of the reply root. Every match is used |
+| `item` | str \| list[str] | required | Element name that begins a record |
+| `recursive` | bool | `false` | Also look for `item` further down the tree, for replies nested to an arbitrary depth such as `show chassis hardware` |
+| `fields` | dict | `{}` | Field definitions, see below |
+| `metrics` | list | `[]` | Metric definitions, see below |
+| `labels` | list | `[]` | Label definitions applied to every metric of the table, see below |
+
+A field is a path relative to the record, and takes one of these forms:
+
+```yaml
+    fields:
+      peer_state: peer-state                     # child element
+      input_bytes: traffic-statistics.input-bytes  # nested element
+      config_flags: if-config-flags.@flag        # attribute
+      vrrp_mode:                                 # first path that resolves wins
+        - vrrp-mode
+        - active-inherit.vrrp-mode
+      iff_up:                                    # presence instead of value
+        path: if-config-flags.iff-up
+        exists: True
+```
+
+A path with `exists: True` yields the string `"true"` or `"false"` rather than the element value, so it always resolves. Put it last when used in a fallback list.
+
+#### metrics
+
+| key | type | default | description |
+| --- | --- | --- | --- |
+| `name` | str | required | Exposed as `<prefix>_<name>`, with `_total` appended when `type` is `counter` |
+| `value` | str | required | Field name holding the value. A name that is not a field is used as a constant |
+| `type` | str | `untyped` | `untyped`, `counter` or `gauge` |
+| `help` | str | `""` | Text of the HELP line |
+| `regex` | str | none | Applied to the value. Capture group 1 is used if present, otherwise the whole match. A value that does not match is dropped |
+| `value_transform` | dict | none | Maps a string value to a number. The `_` key sets a default, otherwise an unlisted value becomes `NaN` |
+| `to_unixtime` | bool | `false` | Reads the value as `YYYY-MM-DD HH:MM:SS`, `<w>w<d>d HH:MM:SS`, `<d>d HH:MM:SS` or `HH:MM:SS` and converts it to unix time in milliseconds. Anything else becomes `0` |
+
+#### labels
+
+| key | type | default | description |
+| --- | --- | --- | --- |
+| `value` | str | required | Field name holding the label value |
+| `name` | str | same as `value` | Label name |
+| `regex` | str | none | Applied to the label value. Capture group 1 is used, and the label is omitted when it does not match |
+
+A label whose field is missing from the record is omitted. Splitting `xe-0/0/0.1` into a physical interface and a unit:
+
+```yaml
+    labels:
+      - name: interface
+        value: name
+        regex: ([^\.]*).*
+      - name: unit
+        value: name
+        regex: .*\.(\d+)
+```
+
+### Checking a table definition
+
+Get the RPC reply from the device itself to work out what to write.
+
+```
+# The RPC name to put in `rpc:`
+show vrrp | display xml rpc
+
+# The reply XML, to work out container / item / fields
+show vrrp | display xml
+```
+
+Then `/debug` shows the records the current definition extracts from that reply.
+
+```sh
+curl 'localhost:9326/debug?target=192.168.1.1&table=VrrpStatus'
+```
 
 ## License
 

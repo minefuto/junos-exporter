@@ -33,8 +33,16 @@ modules:
       - VrrpStatus
       - BfdStatus
 
-optables:
+tables:
   SystemAlarmStatus:
+    rpc: get-system-alarm-information
+    item: alarm-detail
+    fields:
+      time: alarm-time
+      class: alarm-class
+      description: alarm-description
+      short_description: alarm-short-description
+      type: alarm-type
     metrics:
       - name: system_alarm_time
         value: time
@@ -47,9 +55,17 @@ optables:
       - value: type
 
   ChassisAlarmStatus:
+    rpc: get-alarm-information
+    item: alarm-detail
+    fields:
+      time: alarm-time
+      class: alarm-class
+      description: alarm-description
+      short_description: alarm-short-description
+      type: alarm-type
     metrics:
       - name: chassis_alarm_time
-        value: alarm_time
+        value: time
         type: counter
         help: Alarm time of show chassis alarm
         to_unixtime: True
@@ -59,6 +75,15 @@ optables:
       - value: type
 
   FpcStatus:
+    rpc: get-fpc-information
+    item: fpc
+    recursive: True
+    fields:
+      slot: slot
+      state: state
+      cpu_total: cpu-total
+      memory_heap_utilization: memory-heap-utilization
+      memory_buffer_utilization: memory-buffer-utilization
     metrics:
       - name: fpc_state
         value: state
@@ -82,10 +107,22 @@ optables:
         help: Memory Utilization Buffer of show chassis fpc
         type: gauge
     labels:
-      - name: slot
-        value: key
+      - value: slot
 
   HardwareStatus:
+    rpc: get-chassis-inventory
+    item:
+      - chassis
+      - chassis-module
+      - chassis-sub-module
+      - chassis-sub-sub-module
+      - chassis-sub-sub-sub-module
+    recursive: True
+    fields:
+      name: name
+      serial_number: serial-number
+      part_number: part-number
+      description: description
     metrics:
       - name: hardware_info
         value: 1
@@ -99,6 +136,11 @@ optables:
       - value: description
 
   EnvironmentStatus:
+    rpc: get-environment-information
+    item: environment-item
+    fields:
+      name: name
+      status: status
     metrics:
       - name: environment_status
         value: status
@@ -114,6 +156,19 @@ optables:
       - value: name
 
   RoutingEngineStatus:
+    rpc: get-route-engine-information
+    item: route-engine
+    fields:
+      slot: slot
+      mastership_state: mastership-state
+      status: status
+      memory_buffer_utilization: memory-buffer-utilization
+      cpu_user: cpu-user
+      cpu_background: cpu-background
+      cpu_system: cpu-system
+      cpu_interrupt: cpu-interrupt
+      cpu_idle: cpu-idle
+      start_time: start-time
     metrics:
       - name: routing_engine_mastership_state
         value: mastership_state
@@ -153,10 +208,15 @@ optables:
         help: Start time of show chassis routing-engine
         to_unixtime: True
     labels:
-      - name: slot
-        value: key
+      - value: slot
 
   StorageStatus:
+    rpc: get-system-storage
+    item: filesystem
+    fields:
+      filesystem_name: filesystem-name
+      used_percent: used-percent
+      mounted_on: mounted-on
     metrics:
       - name: storage_used_percent
         value: used_percent
@@ -164,10 +224,49 @@ optables:
         help: Capacity of show system storage
     labels:
       - name: name
-        value: key
+        value: filesystem_name
       - value: mounted_on
 
   PhysicalInterfaceStatus:
+    rpc: get-interface-information
+    args:
+      extensive: True
+      interface_name: '[afgxe][et]-*'
+    item: physical-interface
+    fields:
+      name: name
+      oper_status: oper-status
+      admin_status: admin-status
+      description: description
+      speed: speed
+      mtu: mtu
+      link_mode: link-mode
+      interface_flapped: interface-flapped
+      input_bytes: traffic-statistics.input-bytes
+      input_packets: traffic-statistics.input-packets
+      output_bytes: traffic-statistics.output-bytes
+      output_packets: traffic-statistics.output-packets
+      input_errors: input-error-list.input-errors
+      input_drops: input-error-list.input-drops
+      framing_errors: input-error-list.framing-errors
+      input_runts: input-error-list.input-runts
+      input_discards: input-error-list.input-discards
+      input_l3_incompletes: input-error-list.input-l3-incompletes
+      input_l2_channel_errors: input-error-list.input-l2-channel-errors
+      input_l2_mismatch_timeouts: input-error-list.input-l2-mismatch-timeouts
+      input_fifo_errors: input-error-list.input-fifo-errors
+      input_resource_errors: input-error-list.input-resource-errors
+      carrier_transitions: output-error-list.carrier-transitions
+      output_errors: output-error-list.output-errors
+      output_drops: output-error-list.output-drops
+      collisions: output-error-list.output-collisions
+      aged_packets: output-error-list.aged-packets
+      mtu_errors: output-error-list.mtu-errors
+      hs_link_crc_errors: output-error-list.hs-link-crc-errors
+      output_fifo_errors: output-error-list.output-fifo-errors
+      output_resource_errors: output-error-list.output-resource-errors
+      bit_error_seconds: ethernet-pcs-statistics.bit-error-seconds
+      errored_blocks_seconds: ethernet-pcs-statistics.errored-blocks-seconds
     metrics:
       - name: interface_admin_status
         value: admin_status
@@ -306,21 +405,40 @@ optables:
         value: description
 
   LogicalInterfaceStatus:
+    rpc: get-interface-information
+    args:
+      detail: True
+      interface_name: '[afgxe][et]-*'
+    container: physical-interface
+    item: logical-interface
+    fields:
+      name: name
+      description: description
+      input_bytes: traffic-statistics.input-bytes
+      input_packets: traffic-statistics.input-packets
+      output_bytes: traffic-statistics.output-bytes
+      output_packets: traffic-statistics.output-packets
+      iff_up:
+        path: if-config-flags.iff-up
+        exists: True
+      iff_down:
+        path: if-config-flags.iff-down
+        exists: True
     metrics:
       - name: interface_admin_status
         value: iff_down
         type: gauge
         help: "Admin status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
-          False: 2
-          True: 1
+          "false": 2
+          "true": 1
       - name: interface_oper_status
         value: iff_up
         type: gauge
         help: "Oper status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
-          True: 2
-          False: 1
+          "true": 2
+          "false": 1
       - name: interface_input_bytes
         value: input_bytes
         type: counter
@@ -348,6 +466,14 @@ optables:
         value: description
 
   InterfaceOpticStatus:
+    rpc: get-interface-optics-diagnostics-information
+    args:
+      interface_name: '[efgx][et]-*'
+    item: physical-interface
+    fields:
+      name: name
+      rx_optic_power: optics-diagnostics.rx-signal-avg-optical-power-dbm
+      tx_optic_power: optics-diagnostics.laser-output-power-dbm
     metrics:
       - name: interface_rx_optic_power
         value: rx_optic_power
@@ -359,9 +485,15 @@ optables:
         help: Laser output power of show interfaces diagnostics optics
     labels:
       - name: interface
-        value: key
+        value: name
 
   LldpStatus:
+    rpc: get-lldp-neighbors-information
+    item: lldp-neighbor-information
+    fields:
+      local_port_id: lldp-local-port-id
+      remote_port_id: lldp-remote-port-id
+      remote_system_name: lldp-remote-system-name
     metrics:
       - name: lldp_neighbor_info
         value: 1
@@ -371,11 +503,19 @@ optables:
       - name: remote
         value: remote_system_name
       - name: interface
-        value: key.0
+        value: local_port_id
       - name: remote_interface
-        value: key.1
+        value: remote_port_id
 
   LacpStatus:
+    rpc: get-lacp-interface-information
+    container: lacp-interface-information
+    item: lag-lacp-protocol
+    fields:
+      name: name
+      receive_state: lacp-receive-state
+      transmit_state: lacp-transmit-state
+      mux_state: lacp-mux-state
     metrics:
       - name: lacp_receive_state
         value: receive_state
@@ -408,9 +548,17 @@ optables:
           "Waiting": 0
     labels:
       - name: interface
-        value: key
+        value: name
 
   RouteStatus:
+    rpc: get-route-summary-information
+    container: route-table
+    item: protocols
+    fields:
+      table_name: table-name
+      protocol_name: protocol-name
+      protocol_route_count: protocol-route-count
+      active_route_count: active-route-count
     metrics:
       - name: route_protocol_route_count
         value: protocol_route_count
@@ -422,11 +570,20 @@ optables:
         help: Protocol active routes of show route summary
     labels:
       - name: table
-        value: key.0
+        value: table_name
       - name: protocol
-        value: key.1
+        value: protocol_name
 
   ArpStatus:
+    rpc: get-arp-table-information
+    args:
+      expiration-time: True
+    item: arp-table-entry
+    fields:
+      mac_address: mac-address
+      interface_name: interface-name
+      ip_address: ip-address
+      time_to_expire: time-to-expire
     metrics:
       - name: arp_time_to_expire
         value: time_to_expire
@@ -436,15 +593,24 @@ optables:
       - name: address
         value: ip_address
       - name: mac
-        value: key.0
+        value: mac_address
       - name: interface
-        value: key.1
+        value: interface_name
         regex: ([^\.]*).*
       - name: unit
-        value: key.1
+        value: interface_name
         regex: .*\.(\d+)
 
   OspfInterfaceStatus:
+    rpc: get-ospf-interface-information
+    args:
+      detail: True
+    item: ospf-interface
+    fields:
+      interface_name: interface-name
+      interface_cost: interface-cost
+      interface_state: ospf-interface-state
+      area: ospf-area
     metrics:
       - name: ospf_interface_cost
         value: interface_cost
@@ -461,6 +627,17 @@ optables:
         value: area
 
   OspfNeighborStatus:
+    rpc: get-ospf-neighbor-information
+    args:
+      extensive: True
+    item: ospf-neighbor
+    fields:
+      interface_name: interface-name
+      neighbor_id: neighbor-id
+      neighbor_address: neighbor-address
+      neighbor_state: ospf-neighbor-state
+      neighbor_up_time: neighbor-up-time
+      area: ospf-area
     metrics:
       - name: ospf_neighbor_state
         value: neighbor_state
@@ -493,6 +670,16 @@ optables:
         value: area
 
   BgpStatus:
+    rpc: get-bgp-summary-information
+    item: bgp-peer
+    fields:
+      peer_as: peer-as
+      peer_address: peer-address
+      peer_type: peer-type
+      peer_state: peer-state
+      description: description
+      flap_count: flap-count
+      elapsed_time: elapsed-time
     metrics:
       - name: bgp_neighbor_state
         value: peer_state
@@ -521,6 +708,19 @@ optables:
       - value: description
 
   BgpRouteStatus:
+    rpc: get-bgp-summary-information
+    container: bgp-peer
+    item: bgp-rib
+    fields:
+      table: name
+      active_prefix_count: active-prefix-count
+      received_prefix_count: received-prefix-count
+      accepted_prefix_count: accepted-prefix-count
+      suppressed_prefix_count: suppressed-prefix-count
+      peer_as: peer-as
+      peer_address: peer-address
+      peer_type: peer-type
+      description: description
     metrics:
       - name: bgp_neighbor_active_prefix_count
         value: active_prefix_count
@@ -543,12 +743,25 @@ optables:
       - value: peer_address
       - value: peer_type
       - value: description
-      - value: table
+      - name: table
+        value: table
 
   VrrpStatus:
+    rpc: get-vrrp-information
+    container: vrrp-interface
+    item: vrrp-vlan
+    fields:
+      physical_interface: physical-interface
+      unit: unit
+      interface_state: interface-state
+      group: group
+      vrrp_state: vrrp-state
+      vrrp_mode:
+        - vrrp-mode
+        - active-inherit.vrrp-mode
     metrics:
       - name: vrrp_state
-        value: state
+        value: vrrp_state
         type: gauge
         help: "VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
@@ -560,15 +773,19 @@ optables:
           "idle": 0
     labels:
       - name: interface
-        value: key
-        regex: ([^\.]*).*
-      - name: unit
-        value: key
-        regex: .*\.(\d+)
-      - value: mode
+        value: physical_interface
+      - value: unit
+      - name: mode
+        value: vrrp_mode
       - value: group
 
   BfdStatus:
+    rpc: get-bfd-session-information
+    item: bfd-session
+    fields:
+      session_interface: session-interface
+      neighbor: session-neighbor
+      state: session-state
     metrics:
       - name: bfd_state
         value: state
@@ -581,9 +798,9 @@ optables:
           "Failing": 0
     labels:
       - name: interface
-        value: key
+        value: session_interface
         regex: ([^\.]*).*
       - name: unit
-        value: key
+        value: session_interface
         regex: .*\.(\d+)
       - value: neighbor

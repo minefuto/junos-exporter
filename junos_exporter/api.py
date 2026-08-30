@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -10,12 +11,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from junos_exporter.config import Config, logger
 from junos_exporter.connector import ConnecterBuilder, Connector
 from junos_exporter.exporter import Exporter, ExporterBuilder
+from junos_exporter.parser import Parser
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = Config()
     app.state.timeout = config.timeout
+    app.state.tables = config.tables
     app.state.exporter = ExporterBuilder(config)
     app.state.connector = ConnecterBuilder(config)
     yield
@@ -47,7 +50,7 @@ async def metrics(
         return await asyncio.wait_for(
             exporter.collect(connector), timeout=app.state.timeout
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error(
             f"Request timeout(Target: {connector.target}, Timeout: {app.state.timeout})"
         )
@@ -59,7 +62,24 @@ async def metrics(
 
 @app.get("/debug", tags=["debug"])
 async def debug(
-    connector: Annotated[Connector, Depends(get_connector)], optable: str
+    connector: Annotated[Connector, Depends(get_connector)],
+    table: str,
 ) -> Response:
-    content = await connector.debug(optable)
-    return Response(content=content, media_type="application/json")
+    if table not in app.state.tables:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Table is not defined(Table: {table})",
+        )
+
+    definition = app.state.tables[table]
+    xml = await connector.get(table, definition)
+    if xml is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not get rpc reply(Target: {connector.target}, Table: {table})",
+        )
+
+    return Response(
+        content=json.dumps(Parser(definition).parse(xml), indent=2),
+        media_type="application/json",
+    )
