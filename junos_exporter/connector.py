@@ -148,6 +148,8 @@ class Connector:
         """Sends the table's rpc and returns the reply element as a string."""
         args = []
         for arg, value in table.args.items():
+            if value is False:
+                continue
             tag = arg.replace("_", "-")
             if value is True:
                 args.append(f"<{tag}/>")
