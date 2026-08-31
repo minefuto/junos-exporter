@@ -748,6 +748,8 @@ tables:
 
   VrrpStatus:
     rpc: get-vrrp-information
+    args:
+      detail: True
     container: vrrp-interface
     item: vrrp-vlan
     fields:
@@ -759,11 +761,13 @@ tables:
       vrrp_mode:
         - vrrp-mode
         - active-inherit.vrrp-mode
+      virtual_router_uptime: virtual-router-uptime
+      master_router_uptime: master-router-uptime
     metrics:
       - name: vrrp_state
         value: vrrp_state
         type: gauge
-        help: "VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
+        help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
           "master": 5
           "backup": 4
@@ -771,6 +775,16 @@ tables:
           "bringup": 2
           "init": 1
           "idle": 0
+      - name: virtual_router_uptime
+        value: virtual_router_uptime
+        type: gauge
+        help: "Virtual router uptime of show vrrp detail"
+        to_unixtime: True
+      - name: master_router_uptime
+        value: master_router_uptime
+        type: gauge
+        help: "Master router uptime of show vrrp detail"
+        to_unixtime: True
     labels:
       - name: interface
         value: physical_interface

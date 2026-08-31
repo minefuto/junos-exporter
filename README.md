@@ -169,7 +169,7 @@ The bundled `config.yml` defines 20 tables covering alarms, chassis, interfaces,
 | `OspfNeighborStatus` | `get-ospf-neighbor-information` | `show ospf neighbor extensive` |
 | `BgpStatus` | `get-bgp-summary-information` | `show bgp summary` |
 | `BgpRouteStatus` | `get-bgp-summary-information` | `show bgp summary` |
-| `VrrpStatus` | `get-vrrp-information` | `show vrrp` |
+| `VrrpStatus` | `get-vrrp-information` | `show vrrp detail` |
 | `BfdStatus` | `get-bfd-session-information` | `show bfd session` |
 
 
@@ -183,7 +183,7 @@ Records are cut out of the reply like this:
 - Every entry in `fields` is looked up in three places and the **first hit wins**: **(a)** inside the `item` element, **(b)** among the siblings that follow it, up to the next `item`, **(c)** among the ancestor's children that appeared before that `item` -- which is how a parent's values are inherited by its records.
 - A field that resolves nowhere is simply left out of the record.
 
-For example, `show vrrp` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead:
+For example, `show vrrp detail` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead: 
 
 ```xml
 <vrrp-information>
@@ -231,7 +231,7 @@ tables:
       - name: vrrp_state
         value: vrrp_state
         type: gauge
-        help: "VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
+        help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
           "master": 5
           "backup": 4
@@ -251,7 +251,7 @@ tables:
 Which is exposed as:
 
 ```
-# HELP junos_vrrp_state VR State of show vrrp(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)
+# HELP junos_vrrp_state VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)
 # TYPE junos_vrrp_state gauge
 junos_vrrp_state{interface="xe-0/0/0",unit="1",mode="active",group="10"} 5.0
 junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
@@ -325,10 +325,10 @@ Get the RPC reply from the device itself to work out what to write.
 
 ```
 # The RPC name to put in `rpc:`
-show vrrp | display xml rpc
+show vrrp detail | display xml rpc
 
 # The reply XML, to work out container / item / fields
-show vrrp | display xml
+show vrrp detail | display xml
 ```
 
 Then `/debug` shows the records the current definition extracts from that reply.
