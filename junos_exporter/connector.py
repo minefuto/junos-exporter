@@ -1,15 +1,19 @@
-import re
 import socket
 from types import TracebackType
+from xml.sax.saxutils import escape
 
+import pygxml
 from asyncssh.pbe import KeyEncryptionError
 from asyncssh.public_key import KeyImportError
 from fastapi import HTTPException, status
-from lxml import etree
 from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
 from scrapli_netconf import AsyncNetconfDriver
 
 from junos_exporter.config import Config, Credential, Table, logger
+
+
+def _localname(tag: str) -> str:
+    return tag.rpartition(":")[2]
 
 
 class RpcError(Exception):
@@ -123,34 +127,37 @@ class Connector:
             f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
         )
 
-    async def _get_rpc(self, filter_: str) -> etree._Element:
-        rpc = await self.conn.rpc(filter_=filter_)
-        xml = rpc.xml_result
-        if len(xml) == 0:
+    async def _get_rpc(self, filter_: str) -> str:
+        response = await self.conn.rpc(filter_=filter_)
+        reply = pygxml.parse(response.result).get("rpc-reply")
+        if not reply.exists():
+            raise RpcError("rpc-reply is not found")
+        if reply.type_ is not dict:
             raise RpcError("rpc-reply is empty")
 
-        if re.match(r"\{.*\}rpc-reply$", xml.tag) and not re.match(
-            r"\{.*\}rpc-error$", xml[0].tag
-        ):
-            return xml[0]
-        if err := xml.find(
-            ".//{urn:ietf:params:xml:ns:netconf:base:1.0}error-message"
-        ).text:
-            raise RpcError(err)
-        else:
-            raise RpcError("unknown rpc error")
+        name, element = next(iter(reply.children()))
+        if _localname(name) != "rpc-error":
+            if element.type_ is dict:
+                return element.to_str()
+            return f"<{name}>{escape(element.to_str())}</{name}>"
+
+        message = element.get("error-message")
+        raise RpcError(message.to_str() or "unknown rpc error")
 
     async def get(self, name: str, table: Table) -> str | None:
         """Sends the table's rpc and returns the reply element as a string."""
-        rpc = etree.Element(table.rpc, format="xml-minified")
+        args = []
         for arg, value in table.args.items():
-            element = etree.SubElement(rpc, arg.replace("_", "-"))
-            if value is not True:
-                element.text = str(value)
+            tag = arg.replace("_", "-")
+            if value is True:
+                args.append(f"<{tag}/>")
+            else:
+                args.append(f"<{tag}>{escape(str(value))}</{tag}>")
+        rpc = f'<{table.rpc} format="xml-minified">{"".join(args)}</{table.rpc}>'
 
         logger.debug(f"Start to get rpc reply(Target: {self.target}, Table: {name})")
         try:
-            reply = await self._get_rpc(etree.tostring(rpc).decode())
+            reply = await self._get_rpc(rpc)
         except RpcError as err:
             logger.error(
                 f"Could not get rpc reply(Target: {self.target}, Table: {name}, RpcError: {err})"
@@ -159,7 +166,7 @@ class Connector:
         logger.debug(
             f"Completed to get rpc reply(Target: {self.target}, Table: {name})"
         )
-        return etree.tostring(reply).decode()
+        return reply
 
 
 class ConnecterBuilder:

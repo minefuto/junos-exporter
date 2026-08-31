@@ -250,7 +250,6 @@ source = { editable = "." }
 dependencies = [
     { name = "asyncssh" },
     { name = "fastapi" },
-    { name = "lxml" },
     { name = "pygxml" },
     { name = "pyyaml" },
     { name = "scrapli-netconf" },
@@ -259,7 +258,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "lxml-stubs" },
     { name = "ruff" },
     { name = "ty" },
     { name = "types-pyyaml" },
@@ -269,7 +267,6 @@ dev = [
 requires-dist = [
     { name = "asyncssh", specifier = ">=2.20.0" },
     { name = "fastapi", specifier = ">=0.115.8" },
-    { name = "lxml", specifier = ">=5.3.0" },
     { name = "pygxml", specifier = ">=0.0.5" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "scrapli-netconf", specifier = ">=2025.1.30" },
@@ -278,7 +275,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "lxml-stubs", specifier = ">=0.5.1" },
     { name = "ruff", specifier = ">=0.9.7" },
     { name = "ty", specifier = ">=0.0.16" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20241230" },
@@ -414,15 +410,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/52/22/2e896cfba4e86b805eb8a3259cbdc1601971dc8fda5b1db2044ec2a3e6f0/lxml-6.1.2-pp311-pypy311_pp73-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f93bc5e25992f5545709000d840c6cafdbd022781a7a0ed79d58a5633733a4e8", size = 4257333, upload-time = "2026-08-19T05:03:29.355Z" },
     { url = "https://files.pythonhosted.org/packages/b0/1d/9dbdbfa284ea96aee7c368e0ac73994f7e1375281070c355bcd85d4f7a77/lxml-6.1.2-pp311-pypy311_pp73-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:662432a6103e671d971e06e75ed146d9ff67f39d2c98c2f26613b6057f54eafc", size = 4410828, upload-time = "2026-08-19T05:03:31.948Z" },
     { url = "https://files.pythonhosted.org/packages/f9/f2/fea24b044219458c252e0a0a08074a27dc9e28edb85f83533e36e3ddb57d/lxml-6.1.2-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:ba0dfead73be5be9ad0b7fbf9f31ff29c1b1eae858816dfc8d85099d6e4af0d6", size = 3511278, upload-time = "2026-08-19T05:03:34.597Z" },
-]
-
-[[package]]
-name = "lxml-stubs"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/99/da/1a3a3e5d159b249fc2970d73437496b908de8e4716a089c69591b4ffa6fd/lxml-stubs-0.5.1.tar.gz", hash = "sha256:e0ec2aa1ce92d91278b719091ce4515c12adc1d564359dfaf81efa7d4feab79d", size = 14778, upload-time = "2024-01-10T09:37:46.521Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/c9/e0f8e4e6e8a69e5959b06499582dca6349db6769cc7fdfb8a02a7c75a9ae/lxml_stubs-0.5.1-py3-none-any.whl", hash = "sha256:1f689e5dbc4b9247cb09ae820c7d34daeb1fdbd1db06123814b856dae7787272", size = 13584, upload-time = "2024-01-10T09:37:44.931Z" },
 ]
 
 [[package]]

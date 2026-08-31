@@ -11,7 +11,6 @@ requires-python = ">=3.11"
 dependencies = [
     "asyncssh>=2.20.0",
     "fastapi>=0.115.8",
-    "lxml>=5.3.0",
     "pygxml>=0.0.5",
     "pyyaml>=6.0.2",
     "scrapli-netconf>=2025.1.30",
@@ -37,7 +36,6 @@ junos-exporter = "junos_exporter.__main__:cli"
 
 [dependency-groups]
 dev = [
-    "lxml-stubs>=0.5.1",
     "ruff>=0.9.7",
     "ty>=0.0.16",
     "types-pyyaml>=6.0.12.20241230",
