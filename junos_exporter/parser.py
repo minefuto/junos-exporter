@@ -29,23 +29,28 @@ class Parser:
 
     def parse(self, xml: str) -> list[dict[str, str]]:
         document = pygxml.parse(xml)
-        return [
+        records = (
             self._to_record(*record)
             for container in self._containers(document)
             for record in self._scan(container, [])
-        ]
+        )
+        return [record for record in records if record]
 
     def _containers(self, document: pygxml.Result) -> list[pygxml.Result]:
         nodes = [document]
         for segment in self.container:
-            nodes = [v for n in nodes for k, v in n.children() if k == segment]
+            nodes = [v for n in nodes for k, v in _children(n) if k == segment]
         return nodes
 
     def _scan(
         self, node: pygxml.Result, inherited: list[Pair], boundary: bool = False
     ) -> Iterator[Record]:
-        children = list(node.children())
-        starts = [i for i, (name, _) in enumerate(children) if name in self.items]
+        children = _children(node)
+        starts = [
+            i
+            for i, (name, node_) in enumerate(children)
+            if name in self.items and node_.type_ is dict
+        ]
 
         if not starts:
             if not self.recursive:
@@ -112,6 +117,10 @@ class Parser:
                 if found.exists():
                     return found
         return None
+
+
+def _children(node: pygxml.Result) -> list[Pair]:
+    return list(node.children()) if node.type_ is dict else []
 
 
 def _to_str(result: pygxml.Result) -> str:
