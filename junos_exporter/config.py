@@ -166,7 +166,7 @@ class Config:
                 try:
                     with open(c) as f:
                         config = yaml.safe_load(f)
-                except ValidationError as e:
+                except yaml.YAMLError as e:
                     sys.exit(f"failed to load config file.\n{e}")
 
         if not config:
@@ -174,16 +174,25 @@ class Config:
                 "config file(./config.yml or ~/.junos-exporter/config.yml) is not found."
             )
 
-        self.general = General(**config["general"])
-        self.credentials = {
-            name: Credential.model_validate(credential)
-            for name, credential in config["credentials"].items()
-        }
-        self.modules = {
-            name: Module.model_validate(module, context={"tables": config["tables"]})
-            for name, module in config["modules"].items()
-        }
-        self.tables = {name: Table(**table) for name, table in config["tables"].items()}
+        try:
+            self.general = General(**config["general"])
+            self.credentials = {
+                name: Credential.model_validate(credential)
+                for name, credential in config["credentials"].items()
+            }
+            self.modules = {
+                name: Module.model_validate(
+                    module, context={"tables": config["tables"]}
+                )
+                for name, module in config["modules"].items()
+            }
+            self.tables = {
+                name: Table(**table) for name, table in config["tables"].items()
+            }
+        except ValidationError as e:
+            sys.exit(f"failed to load config file.\n{e}")
+        except KeyError as e:
+            sys.exit(f"failed to load config file.\nsection({e}) is not found.")
 
     @property
     def prefix(self) -> str:
