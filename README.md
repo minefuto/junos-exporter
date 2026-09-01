@@ -82,7 +82,8 @@ The `junos-exporter` is powered by the uvicorn ASGI server. You can customize th
 
 ```
 usage: junos-exporter [-h] [--host HOST] [--log-level {critical,error,warning,info,debug,trace}]
-                      [--no-access-log] [--port PORT] [--reload] [--root-path ROOT_PATH] [--workers WORKERS]
+                      [--no-access-log] [--port PORT] [--reload] [--root-path ROOT_PATH] [--version]
+                      [--workers WORKERS]
 
 options:
   -h, --help            Show this help message and exit
@@ -93,6 +94,7 @@ options:
   --reload              Enable auto reload
   --root-path ROOT_PATH 
                         Root path [default: ""]
+  --version             Show version number and exit
   --workers WORKERS     Number of worker processes [default: 1]
 ```
 
