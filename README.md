@@ -28,6 +28,7 @@ pip install junos-exporter
    ```
 
 2. Configure the `config.yml`
+   > **Note**: 0.1.0 replaces the PyEZ Table/View format used up to 0.0.12. The RPC and the rules for reading its reply are now written as [pygxml](https://github.com/minefuto/pygxml) paths in the `tables` section of `config.yml` itself.
 
    ```yaml
    general:
@@ -175,13 +176,13 @@ The bundled `config.yml` defines 20 tables covering alarms, chassis, interfaces,
 
 ### Defining a table
 
-A table is one RPC plus the rules for reading its reply. The reply XML is scanned into **records** (a flat `name -> value` mapping), and each record becomes one metric sample.
+A table is one RPC plus the rules for reading its reply. The reply XML is scanned into **records** (a flat `path -> value` mapping), and each record becomes one metric sample.
 
 Records are cut out of the reply like this:
 
 - Each element matching `container` is a starting point, and `item` marks where a record **begins**. Junos often emits records without a wrapping element, so a record is not necessarily the subtree of the `item` element.
-- Every entry in `fields` is looked up in three places and the **first hit wins**: **(a)** inside the `item` element, **(b)** among the siblings that follow it, up to the next `item`, **(c)** among the ancestor's children that appeared before that `item` -- which is how a parent's values are inherited by its records.
-- A field that resolves nowhere is simply left out of the record.
+- Every `path` written in `metrics` and `labels` is looked up in three places and the **first hit wins**: **(a)** inside the `item` element, **(b)** among the siblings that follow it, up to the next `item`, **(c)** among the ancestor's children that appeared before that `item` -- which is how a parent's values are inherited by its records.
+- A path that resolves nowhere is simply left out of the record, and the metric or label using it is not exposed for that record.
 
 For example, `show vrrp detail` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead: 
 
@@ -210,7 +211,7 @@ For example, `show vrrp detail` returns each VR as a `vrrp-vlan` element followe
 </vrrp-information>
 ```
 
-The bundled `VrrpStatus` table reads it as follows. `physical_interface` and `unit` are found by rule (a), the rest by rule (b), and `vrrp_mode` lists two paths so that the second record falls back to the nested one.
+The bundled `VrrpStatus` table reads it as follows. `physical-interface` and `unit` are found by rule (a), the rest by rule (b), and the `mode` label lists two paths so that the second record falls back to the nested one.
 
 ```yaml
 tables:
@@ -218,18 +219,9 @@ tables:
     rpc: get-vrrp-information
     container: vrrp-interface
     item: vrrp-vlan
-    fields:
-      physical_interface: physical-interface
-      unit: unit
-      interface_state: interface-state
-      group: group
-      vrrp_state: vrrp-state
-      vrrp_mode:
-        - vrrp-mode
-        - active-inherit.vrrp-mode
     metrics:
       - name: vrrp_state
-        value: vrrp_state
+        path: vrrp-state
         type: gauge
         help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
@@ -241,11 +233,15 @@ tables:
           "idle": 0
     labels:
       - name: interface
-        value: physical_interface
-      - value: unit
+        path: physical-interface
+      - name: unit
+        path: unit
       - name: mode
-        value: vrrp_mode
-      - value: group
+        path:
+          - vrrp-mode
+          - active-inherit.vrrp-mode
+      - name: group
+        path: group
 ```
 
 Which is exposed as:
@@ -266,33 +262,39 @@ junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
 | `container` | str | `""` | Path to the parent of the records, `.` separated and relative to the child level of the reply root. Every match is used |
 | `item` | str \| list[str] | required | Element name that begins a record |
 | `recursive` | bool | `false` | Also look for `item` further down the tree, for replies nested to an arbitrary depth such as `show chassis hardware` |
-| `fields` | dict | `{}` | Field definitions, see below |
 | `metrics` | list | `[]` | Metric definitions, see below |
 | `labels` | list | `[]` | Label definitions applied to every metric of the table, see below |
 
-A field is a path relative to the record, and takes one of these forms:
+#### paths
+
+Both `metrics` and `labels` read their value through a `path` relative to the record, which takes one of these forms:
 
 ```yaml
-    fields:
-      peer_state: peer-state                     # child element
-      input_bytes: traffic-statistics.input-bytes  # nested element
-      config_flags: if-config-flags.@flag        # attribute
-      vrrp_mode:                                 # first path that resolves wins
-        - vrrp-mode
-        - active-inherit.vrrp-mode
-      iff_up:                                    # presence instead of value
-        path: if-config-flags.iff-up
+      - name: peer_state
+        path: peer-state                        # child element
+      - name: input_bytes
+        path: traffic-statistics.input-bytes    # nested element
+      - name: config_flags
+        path: if-config-flags.@flag             # attribute
+      - name: mode
+        path:                                   # first path that resolves wins
+          - vrrp-mode
+          - active-inherit.vrrp-mode
+      - name: iff_up
+        path: if-config-flags.iff-up            # presence instead of value
         exists: True
 ```
 
-A path with `exists: True` yields the string `"true"` or `"false"` rather than the element value, so it always resolves. Put it last when used in a fallback list.
+A path with `exists: True` yields the string `"true"` or `"false"` rather than the element value, so it always resolves. It cannot be combined with a list of paths.
 
 #### metrics
 
 | key | type | default | description |
 | --- | --- | --- | --- |
 | `name` | str | required | Exposed as `<prefix>_<name>`, with `_total` appended when `type` is `counter` |
-| `value` | str | required | Field name holding the value. A name that is not a field is used as a constant |
+| `path` | str \| list[str] | required unless `value` | Path to the value, see above |
+| `value` | float | required unless `path` | Constant to expose instead of reading the reply |
+| `exists` | bool | `false` | Expose whether `path` resolved, as `"true"` or `"false"` |
 | `type` | str | `untyped` | `untyped`, `counter` or `gauge` |
 | `help` | str | `""` | Text of the HELP line |
 | `regex` | str | none | Applied to the value. Capture group 1 is used if present, otherwise the whole match. A value that does not match is dropped |
@@ -303,19 +305,20 @@ A path with `exists: True` yields the string `"true"` or `"false"` rather than t
 
 | key | type | default | description |
 | --- | --- | --- | --- |
-| `value` | str | required | Field name holding the label value |
-| `name` | str | same as `value` | Label name |
+| `name` | str | required | Label name |
+| `path` | str \| list[str] | required | Path to the label value, see above |
+| `exists` | bool | `false` | Expose whether `path` resolved, as `"true"` or `"false"` |
 | `regex` | str | none | Applied to the label value. Capture group 1 is used, and the label is omitted when it does not match |
 
-A label whose field is missing from the record is omitted. Splitting `xe-0/0/0.1` into a physical interface and a unit:
+A label whose path is missing from the record is omitted. Splitting `xe-0/0/0.1` into a physical interface and a unit:
 
 ```yaml
     labels:
       - name: interface
-        value: name
+        path: name
         regex: ([^\.]*).*
       - name: unit
-        value: name
+        path: name
         regex: .*\.(\d+)
 ```
 
@@ -327,7 +330,7 @@ Get the RPC reply from the device itself to work out what to write.
 # The RPC name to put in `rpc:`
 show vrrp detail | display xml rpc
 
-# The reply XML, to work out container / item / fields
+# The reply XML, to work out container / item / path
 show vrrp detail | display xml
 ```
 

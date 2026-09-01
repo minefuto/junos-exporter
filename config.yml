@@ -37,56 +37,44 @@ tables:
   SystemAlarmStatus:
     rpc: get-system-alarm-information
     item: alarm-detail
-    fields:
-      time: alarm-time
-      class: alarm-class
-      description: alarm-description
-      short_description: alarm-short-description
-      type: alarm-type
     metrics:
       - name: system_alarm_time
-        value: time
+        path: alarm-time
         type: counter
         help: Alarm time of show system alarm
         to_unixtime: True
     labels:
-      - value: class
-      - value: description
-      - value: type
+      - name: class
+        path: alarm-class
+      - name: description
+        path: alarm-description
+      - name: type
+        path: alarm-type
 
   ChassisAlarmStatus:
     rpc: get-alarm-information
     item: alarm-detail
-    fields:
-      time: alarm-time
-      class: alarm-class
-      description: alarm-description
-      short_description: alarm-short-description
-      type: alarm-type
     metrics:
       - name: chassis_alarm_time
-        value: time
+        path: alarm-time
         type: counter
         help: Alarm time of show chassis alarm
         to_unixtime: True
     labels:
-      - value: class
-      - value: description
-      - value: type
+      - name: class
+        path: alarm-class
+      - name: description
+        path: alarm-description
+      - name: type
+        path: alarm-type
 
   FpcStatus:
     rpc: get-fpc-information
     item: fpc
     recursive: True
-    fields:
-      slot: slot
-      state: state
-      cpu_total: cpu-total
-      memory_heap_utilization: memory-heap-utilization
-      memory_buffer_utilization: memory-buffer-utilization
     metrics:
       - name: fpc_state
-        value: state
+        path: state
         type: gauge
         help: "State of show chassis fpc(Online: 3, Offline: 2, Present: 1, Empty: 0)"
         value_transform:
@@ -95,19 +83,20 @@ tables:
           "Present": 1
           "Empty": 0
       - name: fpc_cpu_usage
-        value: cpu_total
+        path: cpu-total
         type: gauge
         help: CPU Utilization Total of show chassis fpc
       - name: fpc_memory_heap_utilization
-        value: memory_heap_utilization
+        path: memory-heap-utilization
         help: Memory Utilization Heap of show chassis fpc
         type: gauge
       - name: fpc_memory_buffer_utilization
-        value: memory_buffer_utilization
+        path: memory-buffer-utilization
         help: Memory Utilization Buffer of show chassis fpc
         type: gauge
     labels:
-      - value: slot
+      - name: slot
+        path: slot
 
   HardwareStatus:
     rpc: get-chassis-inventory
@@ -118,32 +107,27 @@ tables:
       - chassis-sub-sub-module
       - chassis-sub-sub-sub-module
     recursive: True
-    fields:
-      name: name
-      serial_number: serial-number
-      part_number: part-number
-      description: description
     metrics:
       - name: hardware_info
         value: 1
         type: gauge
         help: Infomation of show chassis hardware
     labels:
-      - value: name
+      - name: name
+        path: name
       - name: serial
-        value: serial_number
-      - value: part_number
-      - value: description
+        path: serial-number
+      - name: part_number
+        path: part-number
+      - name: description
+        path: description
 
   EnvironmentStatus:
     rpc: get-environment-information
     item: environment-item
-    fields:
-      name: name
-      status: status
     metrics:
       - name: environment_status
-        value: status
+        path: status
         type: gauge
         help: "Status of show chassis environment(OK: 4, Testing: 3, Check: 2, Failed: 1, Absent: 0)"
         value_transform:
@@ -153,25 +137,15 @@ tables:
           "Failed": 1
           "Absent": 0
     labels:
-      - value: name
+      - name: name
+        path: name
 
   RoutingEngineStatus:
     rpc: get-route-engine-information
     item: route-engine
-    fields:
-      slot: slot
-      mastership_state: mastership-state
-      status: status
-      memory_buffer_utilization: memory-buffer-utilization
-      cpu_user: cpu-user
-      cpu_background: cpu-background
-      cpu_system: cpu-system
-      cpu_interrupt: cpu-interrupt
-      cpu_idle: cpu-idle
-      start_time: start-time
     metrics:
       - name: routing_engine_mastership_state
-        value: mastership_state
+        path: mastership-state
         type: gauge
         help: "Current state of show chassis routing-engine(Master: 2, Backup: 1, Disabled: 0)"
         value_transform:
@@ -179,53 +153,51 @@ tables:
           "backup": 1
           "disabled": 0
       - name: routing_engine_memory_buffer_utilization
-        value: memory_buffer_utilization
+        path: memory-buffer-utilization
         type: gauge
         help: Memory utilization of show chassis routing-engine
       - name: routing_engine_cpu_user_utilization
-        value: cpu_user
+        path: cpu-user
         type: gauge
         help: CPU utilization User of show chassis routing-engine
       - name: routing_engine_cpu_background_utilization
-        value: cpu_background
+        path: cpu-background
         type: gauge
         help: CPU utilization Background of show chassis routing-engine
       - name: routing_engine_cpu_system_utilization
-        value: cpu_system
+        path: cpu-system
         type: gauge
         help: CPU utilization Kernel of show chassis routing-engine
       - name: routing_engine_cpu_interrupt_utilization
-        value: cpu_interrupt
+        path: cpu-interrupt
         type: gauge
         help: CPU utilization Interrupt of show chassis routing-engine
       - name: routing_engine_cpu_idle_utilization
-        value: cpu_idle
+        path: cpu-idle
         type: gauge
         help: CPU utilization Idle of show chassis routing-engine
       - name: routing_engine_start_time
-        value: start_time
+        path: start-time
         type: counter
         help: Start time of show chassis routing-engine
         to_unixtime: True
     labels:
-      - value: slot
+      - name: slot
+        path: slot
 
   StorageStatus:
     rpc: get-system-storage
     item: filesystem
-    fields:
-      filesystem_name: filesystem-name
-      used_percent: used-percent
-      mounted_on: mounted-on
     metrics:
       - name: storage_used_percent
-        value: used_percent
+        path: used-percent
         type: gauge
         help: Capacity of show system storage
     labels:
       - name: name
-        value: filesystem_name
-      - value: mounted_on
+        path: filesystem-name
+      - name: mounted_on
+        path: mounted-on
 
   PhysicalInterfaceStatus:
     rpc: get-interface-information
@@ -233,57 +205,23 @@ tables:
       extensive: True
       interface_name: '[afgxe][et]-*'
     item: physical-interface
-    fields:
-      name: name
-      oper_status: oper-status
-      admin_status: admin-status
-      description: description
-      speed: speed
-      mtu: mtu
-      link_mode: link-mode
-      interface_flapped: interface-flapped
-      input_bytes: traffic-statistics.input-bytes
-      input_packets: traffic-statistics.input-packets
-      output_bytes: traffic-statistics.output-bytes
-      output_packets: traffic-statistics.output-packets
-      input_errors: input-error-list.input-errors
-      input_drops: input-error-list.input-drops
-      framing_errors: input-error-list.framing-errors
-      input_runts: input-error-list.input-runts
-      input_discards: input-error-list.input-discards
-      input_l3_incompletes: input-error-list.input-l3-incompletes
-      input_l2_channel_errors: input-error-list.input-l2-channel-errors
-      input_l2_mismatch_timeouts: input-error-list.input-l2-mismatch-timeouts
-      input_fifo_errors: input-error-list.input-fifo-errors
-      input_resource_errors: input-error-list.input-resource-errors
-      carrier_transitions: output-error-list.carrier-transitions
-      output_errors: output-error-list.output-errors
-      output_drops: output-error-list.output-drops
-      collisions: output-error-list.output-collisions
-      aged_packets: output-error-list.aged-packets
-      mtu_errors: output-error-list.mtu-errors
-      hs_link_crc_errors: output-error-list.hs-link-crc-errors
-      output_fifo_errors: output-error-list.output-fifo-errors
-      output_resource_errors: output-error-list.output-resource-errors
-      bit_error_seconds: ethernet-pcs-statistics.bit-error-seconds
-      errored_blocks_seconds: ethernet-pcs-statistics.errored-blocks-seconds
     metrics:
       - name: interface_admin_status
-        value: admin_status
+        path: admin-status
         type: gauge
         help: "Admin status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
           up: 2
           down: 1
       - name: interface_oper_status
-        value: oper_status
+        path: oper-status
         type: gauge
         help: "Oper status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
           up: 2
           down: 1
       - name: interface_speed
-        value: speed
+        path: speed
         type: gauge
         help: Speed of show interfaces extensive
         value_transform:
@@ -294,115 +232,115 @@ tables:
           10Gbps: 10000000000
           100Gbps: 100000000000
       - name: interface_lastflap_seconds
-        value: interface_flapped
+        path: interface-flapped
         type: counter
         help: Last flapped of show interfaces extensive
         to_unixtime: True
       - name: interface_input_errors
-        value: input_errors
+        path: input-error-list.input-errors
         type: counter
         help: Input Errors of show interfaces extensive
       - name: interface_input_drops
-        value: input_drops
+        path: input-error-list.input-drops
         type: counter
         help: Input Drops of show interfaces extensive
       - name: interface_framing_errors
-        value: framing_errors
+        path: input-error-list.framing-errors
         type: counter
         help: Input Framing errors of show interfaces extensive
       - name: interface_input_runts
-        value: input_runts
+        path: input-error-list.input-runts
         type: counter
         help: Input Runts of show interfaces extensive
       - name: interface_input_discards
-        value: input_discards
+        path: input-error-list.input-discards
         type: counter
         help: Input Policed discards of show interfaces extensive
       - name: interface_input_l3_incompletes
-        value: input_l3_incompletes
+        path: input-error-list.input-l3-incompletes
         type: counter
         help: Input L3 incompletes of show interfaces extensive
       - name: interface_input_l2_channel_errors
-        value: input_l2_channel_errors
+        path: input-error-list.input-l2-channel-errors
         type: counter
         help: Input L2 channel errors of show interfaces extensive
       - name: interface_input_l2_mismatch_timeouts
-        value: input_l2_mismatch_timeouts
+        path: input-error-list.input-l2-mismatch-timeouts
         type: counter
         help: Input L2 mismatch timeouts of show interfaces extensive
       - name: interface_input_fifo_errors
-        value: input_fifo_errors
+        path: input-error-list.input-fifo-errors
         type: counter
         help: Input FIFO errors of show interfaces extensive
       - name: interface_input_resource_errors
-        value: input_resource_errors
+        path: input-error-list.input-resource-errors
         type: counter
         help: Input Resource errors of show interfaces extensive
       - name: interface_carrier_transitions
-        value: carrier_transitions
+        path: output-error-list.carrier-transitions
         type: counter
         help: Output Carrier transitions of show interfaces extensive
       - name: interface_output_errors
-        value: output_errors
+        path: output-error-list.output-errors
         type: counter
         help: Output Errors of show interfaces extensive
       - name: interface_output_drops
-        value: output_drops
+        path: output-error-list.output-drops
         type: counter
         help: Output Drops of show interfaces extensive
       - name: interface_collisions
-        value: collisions
+        path: output-error-list.output-collisions
         type: counter
         help: Output Collisions of show interfaces extensive
       - name: interface_aged_packets
-        value: aged_packets
+        path: output-error-list.aged-packets
         type: counter
         help: Output Aged packets of show interfaces extensive
       - name: interface_mtu_errors
-        value: mtu_errors
+        path: output-error-list.mtu-errors
         type: counter
         help: Output MTU errors of show interfaces extensive
       - name: interface_hs_link_crc_errors
-        value: hs_link_crc_errors
+        path: output-error-list.hs-link-crc-errors
         type: counter
         help: Output HS link CRC errors of show interfaces extensive
       - name: interface_output_fifo_errors
-        value: output_fifo_errors
+        path: output-error-list.output-fifo-errors
         type: counter
         help: Output FIFO errors of show interfaces extensive
       - name: interface_output_resource_errors
-        value: output_resource_errors
+        path: output-error-list.output-resource-errors
         type: counter
         help: Output Resource errors of show interfaces extensive
       - name: interface_bit_error_seconds
-        value: bit_error_seconds
+        path: ethernet-pcs-statistics.bit-error-seconds
         type: counter
         help: PCS statistics Bit errors of show interfaces extensive
       - name: interface_errored_blocks_seconds
-        value: errored_blocks_seconds
+        path: ethernet-pcs-statistics.errored-blocks-seconds
         type: counter
         help: PCS statistics Errored blocks of show interfaces extensive
       - name: interface_input_bytes
-        value: input_bytes
+        path: traffic-statistics.input-bytes
         type: counter
         help: Traffic statistics Input Bytes of show interfaces extensive
       - name: interface_output_bytes
-        value: output_bytes
+        path: traffic-statistics.output-bytes
         type: counter
         help: Traffic statistics Output Bytes of show interfaces extensive
       - name: interface_input_packets
-        value: input_packets
+        path: traffic-statistics.input-packets
         type: counter
         help: Traffic statistics Input packets of show interfaces extensive
       - name: interface_output_packets
-        value: output_packets
+        path: traffic-statistics.output-packets
         type: counter
         help: Traffic statistics Output packets of show interfaces extensive
     labels:
       - name: interface
-        value: name
+        path: name
       - name: description
-        value: description
+        path: description
 
   LogicalInterfaceStatus:
     rpc: get-interface-information
@@ -411,89 +349,70 @@ tables:
       interface_name: '[afgxe][et]-*'
     container: physical-interface
     item: logical-interface
-    fields:
-      name: name
-      description: description
-      input_bytes: traffic-statistics.input-bytes
-      input_packets: traffic-statistics.input-packets
-      output_bytes: traffic-statistics.output-bytes
-      output_packets: traffic-statistics.output-packets
-      iff_up:
-        path: if-config-flags.iff-up
-        exists: True
-      iff_down:
-        path: if-config-flags.iff-down
-        exists: True
     metrics:
       - name: interface_admin_status
-        value: iff_down
+        path: if-config-flags.iff-down
+        exists: True
         type: gauge
         help: "Admin status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
           "false": 2
           "true": 1
       - name: interface_oper_status
-        value: iff_up
+        path: if-config-flags.iff-up
+        exists: True
         type: gauge
         help: "Oper status of show interfaces extensive(Up: 2, Down: 1)"
         value_transform:
           "true": 2
           "false": 1
       - name: interface_input_bytes
-        value: input_bytes
+        path: traffic-statistics.input-bytes
         type: counter
         help: Traffic statistics Input Bytes of show interfaces extensive
       - name: interface_output_bytes
-        value: output_bytes
+        path: traffic-statistics.output-bytes
         type: counter
         help: Traffic statistics Output Bytes of show interfaces extensive
       - name: interface_input_packets
-        value: input_packets
+        path: traffic-statistics.input-packets
         type: counter
         help: Traffic statistics Input packets of show interfaces extensive
       - name: interface_output_packets
-        value: output_packets
+        path: traffic-statistics.output-packets
         type: counter
         help: Traffic statistics Output packets of show interfaces extensive
     labels:
       - name: interface
-        value: name
+        path: name
         regex: ([^\.]*).*
       - name: unit
-        value: name
+        path: name
         regex: .*\.(\d+)
       - name: description
-        value: description
+        path: description
 
   InterfaceOpticStatus:
     rpc: get-interface-optics-diagnostics-information
     args:
       interface_name: '[efgx][et]-*'
     item: physical-interface
-    fields:
-      name: name
-      rx_optic_power: optics-diagnostics.rx-signal-avg-optical-power-dbm
-      tx_optic_power: optics-diagnostics.laser-output-power-dbm
     metrics:
       - name: interface_rx_optic_power
-        value: rx_optic_power
+        path: optics-diagnostics.rx-signal-avg-optical-power-dbm
         type: gauge
         help: Laser rx power of show interfaces diagnostics optics
       - name: interface_tx_optic_power
-        value: tx_optic_power
+        path: optics-diagnostics.laser-output-power-dbm
         type: gauge
         help: Laser output power of show interfaces diagnostics optics
     labels:
       - name: interface
-        value: name
+        path: name
 
   LldpStatus:
     rpc: get-lldp-neighbors-information
     item: lldp-neighbor-information
-    fields:
-      local_port_id: lldp-local-port-id
-      remote_port_id: lldp-remote-port-id
-      remote_system_name: lldp-remote-system-name
     metrics:
       - name: lldp_neighbor_info
         value: 1
@@ -501,24 +420,19 @@ tables:
         help: Information of show lldp neighbor
     labels:
       - name: remote
-        value: remote_system_name
+        path: lldp-remote-system-name
       - name: interface
-        value: local_port_id
+        path: lldp-local-port-id
       - name: remote_interface
-        value: remote_port_id
+        path: lldp-remote-port-id
 
   LacpStatus:
     rpc: get-lacp-interface-information
     container: lacp-interface-information
     item: lag-lacp-protocol
-    fields:
-      name: name
-      receive_state: lacp-receive-state
-      transmit_state: lacp-transmit-state
-      mux_state: lacp-mux-state
     metrics:
       - name: lacp_receive_state
-        value: receive_state
+        path: lacp-receive-state
         type: gauge
         help: "Receive State of show lacp interface(Current: 5, Defaulted: 4, Expired: 3, Initialize: 2, LACP disabled: 1, Port disabled: 0)"
         value_transform:
@@ -529,7 +443,7 @@ tables:
           "LACP disabled": 1
           "Port disabled": 0
       - name: lacp_transmit_state
-        value: transmit_state
+        path: lacp-transmit-state
         type: gauge
         help: "Transmit State of show lacp interface(Fast periodic: 3, Slow periodic: 2, Periodic timer: 1, No periodic: 0)"
         value_transform:
@@ -538,7 +452,7 @@ tables:
           "Periodic timer": 1
           "No periodic": 0
       - name: lacp_mux_state
-        value: mux_state
+        path: lacp-mux-state
         type: gauge
         help: "Mux State of show lacp interface(Collecting distributing: 3, Attached: 2, Detached: 1, Waiting: 0)"
         value_transform:
@@ -548,57 +462,47 @@ tables:
           "Waiting": 0
     labels:
       - name: interface
-        value: name
+        path: name
 
   RouteStatus:
     rpc: get-route-summary-information
     container: route-table
     item: protocols
-    fields:
-      table_name: table-name
-      protocol_name: protocol-name
-      protocol_route_count: protocol-route-count
-      active_route_count: active-route-count
     metrics:
       - name: route_protocol_route_count
-        value: protocol_route_count
+        path: protocol-route-count
         type: gauge
         help: Protocol routes of show route summary
       - name: route_active_route_count
-        value: active_route_count
+        path: active-route-count
         type: gauge
         help: Protocol active routes of show route summary
     labels:
       - name: table
-        value: table_name
+        path: table-name
       - name: protocol
-        value: protocol_name
+        path: protocol-name
 
   ArpStatus:
     rpc: get-arp-table-information
     args:
       expiration-time: True
     item: arp-table-entry
-    fields:
-      mac_address: mac-address
-      interface_name: interface-name
-      ip_address: ip-address
-      time_to_expire: time-to-expire
     metrics:
       - name: arp_time_to_expire
-        value: time_to_expire
+        path: time-to-expire
         type: gauge
         help: TTE of show arp expiration-time
     labels:
       - name: address
-        value: ip_address
+        path: ip-address
       - name: mac
-        value: mac_address
+        path: mac-address
       - name: interface
-        value: interface_name
+        path: interface-name
         regex: ([^\.]*).*
       - name: unit
-        value: interface_name
+        path: interface-name
         regex: .*\.(\d+)
 
   OspfInterfaceStatus:
@@ -606,41 +510,29 @@ tables:
     args:
       detail: True
     item: ospf-interface
-    fields:
-      interface_name: interface-name
-      interface_cost: interface-cost
-      interface_state: ospf-interface-state
-      area: ospf-area
     metrics:
       - name: ospf_interface_cost
-        value: interface_cost
+        path: interface-cost
         type: gauge
         help: Cost of show ospf interface detail
     labels:
       - name: interface
-        value: interface_name
+        path: interface-name
         regex: ([^\.]*).*
       - name: unit
-        value: interface_name
+        path: interface-name
         regex: .*\.(\d+)
       - name: area
-        value: area
+        path: ospf-area
 
   OspfNeighborStatus:
     rpc: get-ospf-neighbor-information
     args:
       extensive: True
     item: ospf-neighbor
-    fields:
-      interface_name: interface-name
-      neighbor_id: neighbor-id
-      neighbor_address: neighbor-address
-      neighbor_state: ospf-neighbor-state
-      neighbor_up_time: neighbor-up-time
-      area: ospf-area
     metrics:
       - name: ospf_neighbor_state
-        value: neighbor_state
+        path: ospf-neighbor-state
         type: gauge
         help: "State of show ospf neighbor extensive(Full: 7, Loading: 6, 2Way: 5, Exchange: 4, ExStart: 3, Attempt: 2, Init: 1, Down: 0)"
         value_transform:
@@ -653,36 +545,28 @@ tables:
           "Init": 1
           "Down": 0
       - name: ospf_neighbor_uptime
-        value: neighbor_up_time
+        path: neighbor-up-time
         type: counter
         help: Up of show ospf neighbor extensive
         to_unixtime: True
     labels:
       - name: interface
-        value: interface_name
+        path: interface-name
         regex: ([^\.]*).*
       - name: unit
-        value: interface_name
+        path: interface-name
         regex: .*\.(\d+)
       - name: address
-        value: neighbor_address
+        path: neighbor-address
       - name: area
-        value: area
+        path: ospf-area
 
   BgpStatus:
     rpc: get-bgp-summary-information
     item: bgp-peer
-    fields:
-      peer_as: peer-as
-      peer_address: peer-address
-      peer_type: peer-type
-      peer_state: peer-state
-      description: description
-      flap_count: flap-count
-      elapsed_time: elapsed-time
     metrics:
       - name: bgp_neighbor_state
-        value: peer_state
+        path: peer-state
         type: gauge
         help: "State of show bgp summary(Established: 5, OpenConfirm: 4, OpenSent: 3, Active: 2, Connect: 1, Idle: 0)"
         value_transform:
@@ -693,58 +577,56 @@ tables:
           "Connect": 1
           "Idle": 0
       - name: bgp_neighbor_flap_count
-        value: flap_count
+        path: flap-count
         type: counter
         help: Number of flaps of show bgp summary
       - name: bgp_neighbor_elapsed_time
-        value: elapsed_time
+        path: elapsed-time
         type: counter
         help: Elapsed time of show bgp summary
         to_unixtime: True
     labels:
-      - value: peer_as
-      - value: peer_address
-      - value: peer_type
-      - value: description
+      - name: peer_as
+        path: peer-as
+      - name: peer_address
+        path: peer-address
+      - name: peer_type
+        path: peer-type
+      - name: description
+        path: description
 
   BgpRouteStatus:
     rpc: get-bgp-summary-information
     container: bgp-peer
     item: bgp-rib
-    fields:
-      table: name
-      active_prefix_count: active-prefix-count
-      received_prefix_count: received-prefix-count
-      accepted_prefix_count: accepted-prefix-count
-      suppressed_prefix_count: suppressed-prefix-count
-      peer_as: peer-as
-      peer_address: peer-address
-      peer_type: peer-type
-      description: description
     metrics:
       - name: bgp_neighbor_active_prefix_count
-        value: active_prefix_count
+        path: active-prefix-count
         type: gauge
         help: Active of show bgp summary
       - name: bgp_neighbor_received_prefix_count
-        value: received_prefix_count
+        path: received-prefix-count
         type: gauge
         help: Received of show bgp summary
       - name: bgp_neighbor_accepted_prefix_count
-        value: accepted_prefix_count
+        path: accepted-prefix-count
         type: gauge
         help: Accepted of show bgp summary
       - name: bgp_neighbor_suppressed_prefix_count
-        value: suppressed_prefix_count
+        path: suppressed-prefix-count
         type: gauge
         help: Damped of show bgp summary
     labels:
-      - value: peer_as
-      - value: peer_address
-      - value: peer_type
-      - value: description
+      - name: peer_as
+        path: peer-as
+      - name: peer_address
+        path: peer-address
+      - name: peer_type
+        path: peer-type
+      - name: description
+        path: description
       - name: table
-        value: table
+        path: name
 
   VrrpStatus:
     rpc: get-vrrp-information
@@ -752,20 +634,9 @@ tables:
       detail: True
     container: vrrp-interface
     item: vrrp-vlan
-    fields:
-      physical_interface: physical-interface
-      unit: unit
-      interface_state: interface-state
-      group: group
-      vrrp_state: vrrp-state
-      vrrp_mode:
-        - vrrp-mode
-        - active-inherit.vrrp-mode
-      virtual_router_uptime: virtual-router-uptime
-      master_router_uptime: master-router-uptime
     metrics:
       - name: vrrp_state
-        value: vrrp_state
+        path: vrrp-state
         type: gauge
         help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
@@ -776,33 +647,33 @@ tables:
           "init": 1
           "idle": 0
       - name: virtual_router_uptime
-        value: virtual_router_uptime
+        path: virtual-router-uptime
         type: gauge
         help: "Virtual router uptime of show vrrp detail"
         to_unixtime: True
       - name: master_router_uptime
-        value: master_router_uptime
+        path: master-router-uptime
         type: gauge
         help: "Master router uptime of show vrrp detail"
         to_unixtime: True
     labels:
       - name: interface
-        value: physical_interface
-      - value: unit
+        path: physical-interface
+      - name: unit
+        path: unit
       - name: mode
-        value: vrrp_mode
-      - value: group
+        path:
+          - vrrp-mode
+          - active-inherit.vrrp-mode
+      - name: group
+        path: group
 
   BfdStatus:
     rpc: get-bfd-session-information
     item: bfd-session
-    fields:
-      session_interface: session-interface
-      neighbor: session-neighbor
-      state: session-state
     metrics:
       - name: bfd_state
-        value: state
+        path: session-state
         type: gauge
         help: "State of show bfd session(Up: 3, Down: 2, Init: 1, Failing: 0)"
         value_transform:
@@ -812,9 +683,10 @@ tables:
           "Failing": 0
     labels:
       - name: interface
-        value: session_interface
+        path: session-interface
         regex: ([^\.]*).*
       - name: unit
-        value: session_interface
+        path: session-interface
         regex: .*\.(\d+)
-      - value: neighbor
+      - name: neighbor
+        path: session-neighbor

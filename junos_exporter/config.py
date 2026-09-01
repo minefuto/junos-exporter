@@ -20,6 +20,7 @@ from pydantic import (
 logger = getLogger("uvicorn.error")
 
 XML_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*$")
+PROMETHEUS_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class General(BaseModel):
@@ -58,12 +59,49 @@ class Module(BaseModel):
         return tables
 
 
-class Label(BaseModel):
+class PathSpec(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
-    name: str = ""
-    value: str
+    path: list[str] = Field(default_factory=list)
+    exists: bool = False
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def to_list(cls, path: str | list[str]) -> list[str]:
+        return path if isinstance(path, list) else [path]
+
+    @model_validator(mode="after")
+    def check_exists(self) -> "PathSpec":
+        if self.exists and len(self.path) > 1:
+            raise ValueError("exists cannot be used with fallback paths")
+        return self
+
+    @property
+    def key(self) -> str:
+        return self.path[0]
+
+
+def dedup_specs(specs: list[PathSpec]) -> dict[str, PathSpec]:
+    deduped: dict[str, PathSpec] = {}
+    for spec in specs:
+        if not spec.path:
+            continue
+        found = deduped.setdefault(spec.key, spec)
+        if found.path != spec.path or found.exists != spec.exists:
+            raise ValueError(f"path({spec.key}) has conflicting definitions")
+    return deduped
+
+
+class Label(PathSpec):
+    name: str
     regex: re.Pattern | None = None
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def check_prometheus_name(cls, name: str) -> str:
+        if not PROMETHEUS_NAME.match(name):
+            raise ValueError(f"name({name}) is not a valid prometheus label name")
+        return name
 
     @field_validator("regex", mode="before")
     @classmethod
@@ -73,22 +111,27 @@ class Label(BaseModel):
         return re.compile(regex)
 
     @model_validator(mode="after")
-    def add_name(self) -> "Label":
-        if self.name == "":
-            self.name = self.value
+    def check_path(self) -> "Label":
+        if not self.path:
+            raise ValueError("path is required")
         return self
 
 
-class Metric(BaseModel):
-    model_config = ConfigDict(coerce_numbers_to_str=True)
-
+class Metric(PathSpec):
     name: str
-    value: str
+    value: float | None = None
     type_: Literal["untyped", "counter", "gauge"] = Field("untyped", alias="type")
     help_: str = Field("", alias="help")
     regex: re.Pattern | None = None
     value_transform: defaultdict[str | bool, float] | None = None
     to_unixtime: bool = False
+
+    @field_validator("name", mode="after")
+    @classmethod
+    def check_prometheus_name(cls, name: str) -> str:
+        if not PROMETHEUS_NAME.match(name):
+            raise ValueError(f"name({name}) is not a valid prometheus metric name")
+        return name
 
     @field_validator("regex", mode="before")
     @classmethod
@@ -104,12 +147,11 @@ class Metric(BaseModel):
             return defaultdict(lambda: float(default), value_transform)
         return defaultdict(lambda: float("NaN"), value_transform)
 
-
-class FieldSpec(BaseModel):
-    model_config = ConfigDict(coerce_numbers_to_str=True)
-
-    path: str
-    exists: bool = False
+    @model_validator(mode="after")
+    def check_source(self) -> "Metric":
+        if bool(self.path) is (self.value is not None):
+            raise ValueError("either path or value is required")
+        return self
 
 
 class Table(BaseModel):
@@ -118,7 +160,6 @@ class Table(BaseModel):
     container: str = ""
     item: list[str]
     recursive: bool = False
-    fields_: dict[str, list[FieldSpec]] = Field(default_factory=dict, alias="fields")
     metrics: list[Metric] = Field(default_factory=list)
     labels: list[Label] = Field(default_factory=list)
 
@@ -142,14 +183,14 @@ class Table(BaseModel):
     def to_list(cls, item: str | list[str]) -> list[str]:
         return [item] if isinstance(item, str) else item
 
-    @field_validator("fields_", mode="before")
-    @classmethod
-    def to_specs(cls, fields: dict) -> dict:
-        specs = {}
-        for name, spec in fields.items():
-            candidates = [spec] if isinstance(spec, str | dict) else spec
-            specs[name] = [{"path": c} if isinstance(c, str) else c for c in candidates]
-        return specs
+    @model_validator(mode="after")
+    def check_specs(self) -> "Table":
+        dedup_specs([*self.metrics, *self.labels])
+        return self
+
+    @property
+    def specs(self) -> list[PathSpec]:
+        return list(dedup_specs([*self.metrics, *self.labels]).values())
 
 
 class Config:

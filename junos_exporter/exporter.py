@@ -21,7 +21,8 @@ class MetricConverter:
             self.name = f"{prefix}_{metric.name}_total"
         else:
             self.name = f"{prefix}_{metric.name}"
-        self.value_name = metric.value
+        self.key = metric.key if metric.path else ""
+        self.value = metric.value
         self.type_ = metric.type_
         self.help_ = metric.help_
         self.regex = metric.regex
@@ -83,17 +84,14 @@ class MetricConverter:
     def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
         for label in self.labels:
-            if label.value not in item:
-                continue
-
-            if item[label.value] is None:
+            if label.key not in item:
                 continue
 
             if not label.regex:
-                label_exposition.append(f'{label.name}="{item[label.value]}"')
+                label_exposition.append(f'{label.name}="{item[label.key]}"')
                 continue
 
-            match = label.regex.match(item[label.value])
+            match = label.regex.match(item[label.key])
             if match is None:
                 continue
             else:
@@ -118,28 +116,25 @@ class MetricConverter:
 
         for item in items:
             label_exposition = ",".join(self._convert_label(item))
-            if self.value_name not in item:
-                try:
-                    # static value
-                    exposition.append(
-                        f"{self.name}{{{label_exposition}}} {to_prom(float(self.value_name))}\n"
-                    )
-                    continue
-                except ValueError:
-                    logger.debug(
-                        f"Could not convert metric value(Name: {self.name}, Value: {self.value_name}, Error: value does not exist)"
-                    )
-                    continue
-
-            value = item[self.value_name]
-            if value is None:
+            if self.value is not None:
+                exposition.append(
+                    f"{self.name}{{{label_exposition}}} {to_prom(self.value)}\n"
+                )
                 continue
+
+            if self.key not in item:
+                logger.debug(
+                    f"Could not convert metric value(Name: {self.name}, Path: {self.key}, Error: path was not resolved)"
+                )
+                continue
+
+            value = item[self.key]
 
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
                     logger.debug(
-                        f"Could not convert metric value(Name: {self.name}, Value({self.value_name}): {value}, Regex: {self.regex}, Error: could not match regex)"
+                        f"Could not convert metric value(Name: {self.name}, Path: {self.key}, Value: {value}, Regex: {self.regex}, Error: could not match regex)"
                     )
                     continue
                 else:
@@ -163,7 +158,7 @@ class MetricConverter:
                     )
                 except ValueError:
                     logger.debug(
-                        f"Could not convert metric value(Metric: {self.name}, Value({self.value_name}): {value}, Error: could not convert type to float)"
+                        f"Could not convert metric value(Metric: {self.name}, Path: {self.key}, Value: {value}, Error: could not convert type to float)"
                     )
         return "".join(exposition)
 

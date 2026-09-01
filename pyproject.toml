@@ -1,6 +1,6 @@
 [project]
 name = "junos-exporter"
-version = "0.0.12"
+version = "0.1.0"
 description = "Prometheus Exporter for Junos using pygxml path queries"
 authors = [
   {name = "minefuto", email = "minefuto@gmail.com"}
