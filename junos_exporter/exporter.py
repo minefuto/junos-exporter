@@ -7,6 +7,8 @@ from fastapi import HTTPException, status
 from junos_exporter.config import Config, Label, Metric, logger
 from junos_exporter.connector import Connector
 
+UnixtimeFormats = list[tuple[re.Pattern[str], tuple[str, ...] | None]]
+
 
 class MetricConverter:
     def __init__(
@@ -14,7 +16,7 @@ class MetricConverter:
         metric: Metric,
         labels: list[Label],
         prefix: str,
-        unixtime_regex: dict[str, re.Pattern],
+        unixtime_regex: UnixtimeFormats,
     ) -> None:
         if metric.type_ == "counter":
             self.name = f"{prefix}_{metric.name}_total"
@@ -30,54 +32,18 @@ class MetricConverter:
         self.unixtime_regex = unixtime_regex
 
     def _convert_to_unixtime(self, value: str) -> float:
-        if result := self.unixtime_regex["timestamp"].search(value):
-            return float(
-                datetime.strptime(result.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
-                * 1000
-            )
-
-        init_time = datetime.fromtimestamp(0)
-        if result := self.unixtime_regex["wd_uptime"].search(value):
-            return float(
-                (
-                    init_time
-                    + timedelta(
-                        weeks=int(result.group(1)),
-                        days=int(result.group(2)),
-                        hours=int(result.group(3)),
-                        minutes=int(result.group(4)),
-                        seconds=int(result.group(5)),
-                    )
-                ).timestamp()
-                * 1000
-            )
-        elif result := self.unixtime_regex["d_uptime"].search(value):
-            return float(
-                (
-                    init_time
-                    + timedelta(
-                        days=int(result.group(1)),
-                        hours=int(result.group(2)),
-                        minutes=int(result.group(3)),
-                        seconds=int(result.group(4)),
-                    )
-                ).timestamp()
-                * 1000
-            )
-        elif result := self.unixtime_regex["uptime"].search(value):
-            return float(
-                (
-                    init_time
-                    + timedelta(
-                        hours=int(result.group(1)),
-                        minutes=int(result.group(2)),
-                        seconds=int(result.group(3)),
-                    )
-                ).timestamp()
-                * 1000
-            )
-        else:
-            return 0.0
+        for pattern, units in self.unixtime_regex:
+            result = pattern.search(value)
+            if not result:
+                continue
+            if units is None:
+                parsed = datetime.strptime(result.group(1), "%Y-%m-%d %H:%M:%S")
+            else:
+                parsed = datetime.fromtimestamp(0) + timedelta(
+                    **dict(zip(units, map(int, result.groups()), strict=True))
+                )
+            return float(parsed.timestamp() * 1000)
+        return 0.0
 
     def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
@@ -207,12 +173,30 @@ class ExporterBuilder:
     def __init__(self, config: Config) -> None:
         self.converters = {}
         self.prefix = config.prefix
-        unixtime_regex: dict[str, re.Pattern] = {
-            "timestamp": re.compile(r".*(\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d).*"),
-            "wd_uptime": re.compile(r".*(\d+)w(\d+)d (\d\d):(\d\d):(\d\d).*"),
-            "d_uptime": re.compile(r".*(\d+)d (\d\d):(\d\d):(\d\d).*"),
-            "uptime": re.compile(r".*(\d\d):(\d\d):(\d\d).*"),
-        }
+        # Week forms must precede day forms: "3w4d 04:33" also matches a day form.
+        unixtime_regex: UnixtimeFormats = [
+            (re.compile(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"), None),
+            (
+                re.compile(r"(?<!\d)(\d+)w(\d+)d (\d{1,2}):(\d{2}):(\d{2})"),
+                ("weeks", "days", "hours", "minutes", "seconds"),
+            ),
+            (
+                re.compile(r"(?<!\d)(\d+)w(\d+)d (\d{1,2}):(\d{2})(?!:)"),
+                ("weeks", "days", "hours", "minutes"),
+            ),
+            (
+                re.compile(r"(?<!\d)(\d+)d (\d{1,2}):(\d{2}):(\d{2})"),
+                ("days", "hours", "minutes", "seconds"),
+            ),
+            (
+                re.compile(r"(?<!\d)(\d+)d (\d{1,2}):(\d{2})(?!:)"),
+                ("days", "hours", "minutes"),
+            ),
+            (
+                re.compile(r"(?<!\d)(\d{1,2}):(\d{2}):(\d{2})"),
+                ("hours", "minutes", "seconds"),
+            ),
+        ]
 
         for name, module in config.modules.items():
             converter = {}
