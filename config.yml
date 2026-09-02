@@ -487,6 +487,7 @@ tables:
     rpc: get-arp-table-information
     args:
       expiration-time: True
+      no-resolve: True
     item: arp-table-entry
     metrics:
       - name: arp_time_to_expire
@@ -646,12 +647,12 @@ tables:
           "bringup": 2
           "init": 1
           "idle": 0
-      - name: virtual_router_uptime
+      - name: vrrp_virtual_router_uptime
         path: virtual-router-uptime
         type: gauge
         help: "Virtual router uptime of show vrrp detail"
         to_unixtime: True
-      - name: master_router_uptime
+      - name: vrrp_master_router_uptime
         path: master-router-uptime
         type: gauge
         help: "Master router uptime of show vrrp detail"
