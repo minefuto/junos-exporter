@@ -6,6 +6,7 @@ from importlib.resources import files
 from logging import getLogger
 from typing import Literal
 
+import pygxml
 import yaml
 from pydantic import (
     BaseModel,
@@ -69,6 +70,19 @@ class PathSpec(BaseModel):
     @classmethod
     def to_list(cls, path: str | list[str]) -> list[str]:
         return path if isinstance(path, list) else [path]
+
+    @field_validator("path", mode="after")
+    @classmethod
+    def check_pygxml_path(cls, path: list[str]) -> list[str]:
+        for p in path:
+            try:
+                pygxml.compile(p)
+            except ValueError as e:
+                reason = str(e).splitlines()[0]
+                raise ValueError(
+                    f"path({p}) is not a valid pygxml path: {reason}"
+                ) from None
+        return path
 
     @model_validator(mode="after")
     def check_exists(self) -> "PathSpec":
@@ -227,9 +241,12 @@ class Config:
                 )
                 for name, module in config["modules"].items()
             }
-            self.tables = {
-                name: Table(**table) for name, table in config["tables"].items()
-            }
+            self.tables: dict[str, Table] = {}
+            for name, table in config["tables"].items():
+                try:
+                    self.tables[name] = Table(**table)
+                except ValidationError as e:
+                    sys.exit(f"failed to load config file.\ntable({name})\n{e}")
         except ValidationError as e:
             sys.exit(f"failed to load config file.\n{e}")
         except KeyError as e:
