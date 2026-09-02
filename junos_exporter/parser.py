@@ -9,20 +9,21 @@ Record = tuple[pygxml.Result, list[Pair], list[Pair]]
 
 
 class Candidate:
-    __slots__ = ("path", "head", "tail")
+    __slots__ = ("compiled", "head", "tail")
 
     def __init__(self, path: str) -> None:
-        self.path = path
+        self.compiled = pygxml.compile(path)
         self.head, _, self.tail = path.partition(".")
 
 
 class Field:
-    __slots__ = ("key", "candidates", "exists")
+    __slots__ = ("key", "candidates", "exists", "start")
 
-    def __init__(self, spec: PathSpec) -> None:
+    def __init__(self, spec: PathSpec, start: int) -> None:
         self.key = spec.key
         self.candidates = [Candidate(path) for path in spec.path]
         self.exists = spec.exists
+        self.start = start
 
 
 class Parser:
@@ -30,7 +31,12 @@ class Parser:
         self.container = [s for s in table.container.split(".") if s]
         self.items = set(table.item)
         self.recursive = table.recursive
-        self.fields = [Field(spec) for spec in table.specs]
+        self.fields: list[Field] = []
+        self.paths: list[str | pygxml.Path] = []
+        for spec in table.specs:
+            field = Field(spec, len(self.paths))
+            self.fields.append(field)
+            self.paths.extend(candidate.compiled for candidate in field.candidates)
 
     def parse(self, xml: str) -> list[dict[str, str]]:
         document = pygxml.parse(xml)
@@ -81,9 +87,10 @@ class Parser:
     def _to_record(
         self, own: pygxml.Result, siblings: list[Pair], inherited: list[Pair]
     ) -> dict[str, str]:
+        founds = own.get_many(self.paths)
         record = {}
         for field in self.fields:
-            value = self._resolve(field, own, siblings, inherited)
+            value = self._resolve(field, founds, siblings, inherited)
             if value is not None:
                 record[field.key] = value
         return record
@@ -91,12 +98,14 @@ class Parser:
     def _resolve(
         self,
         field: Field,
-        own: pygxml.Result,
+        founds: list[pygxml.Result],
         siblings: list[Pair],
         inherited: list[Pair],
     ) -> str | None:
-        for candidate in field.candidates:
-            found = self._lookup(candidate, own, siblings, inherited)
+        for offset, candidate in enumerate(field.candidates):
+            found: pygxml.Result | None = founds[field.start + offset]
+            if not found.exists():
+                found = self._lookup(candidate, siblings, inherited)
             if field.exists:
                 return "true" if found is not None else "false"
             if found is not None:
@@ -106,14 +115,9 @@ class Parser:
     def _lookup(
         self,
         candidate: Candidate,
-        own: pygxml.Result,
         siblings: list[Pair],
         inherited: list[Pair],
     ) -> pygxml.Result | None:
-        found = own.get(candidate.path)
-        if found.exists():
-            return found
-
         for scope in (siblings, inherited):
             for name, node in scope:
                 if name != candidate.head:
