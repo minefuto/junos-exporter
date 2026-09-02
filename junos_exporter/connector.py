@@ -8,8 +8,13 @@ from asyncssh.public_key import KeyImportError
 from fastapi import HTTPException, status
 from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
 from scrapli_netconf import AsyncNetconfDriver
+from scrapli_netconf.constants import NetconfVersion
 
 from junos_exporter.config import Config, Credential, Table, logger
+
+NEW_LINE = 10
+CHUNK_MARKER = 35
+END_OF_MESSAGE = b"]]>]]>"
 
 
 def _localname(tag: str) -> str:
@@ -22,6 +27,40 @@ class RpcError(Exception):
 
     def __str__(self) -> str:
         return f"{self.err}"
+
+
+def _deframe(raw: bytes, netconf_version: NetconfVersion) -> bytes:
+    if netconf_version == NetconfVersion.VERSION_1_0:
+        return raw.replace(END_OF_MESSAGE, b"")
+
+    data = raw.strip()
+    end = len(data)
+    chunks = []
+    cursor = 0
+    while cursor < end:
+        if data[cursor] == NEW_LINE:
+            cursor += 1
+            continue
+        if data[cursor] != CHUNK_MARKER:
+            raise RpcError("chunk marker is not found")
+        cursor += 1
+        if cursor >= end or data[cursor] == CHUNK_MARKER:
+            break
+
+        marker = data.find(b"\n", cursor, cursor + 11)
+        if marker == -1:
+            raise RpcError("chunk size is not found")
+        try:
+            size = int(data[cursor:marker])
+        except ValueError:
+            raise RpcError("chunk size is not a number") from None
+        if size <= 0:
+            raise RpcError("chunk size is not positive")
+
+        cursor = marker + 1
+        chunks.append(data[cursor : cursor + size])
+        cursor += size
+    return b"".join(chunks)
 
 
 class Connector:
@@ -128,8 +167,9 @@ class Connector:
         )
 
     async def _get_rpc(self, filter_: str) -> pygxml.Result:
-        response = await self.conn.rpc(filter_=filter_)
-        reply = pygxml.parse(response.result).get("rpc-reply")
+        request = self.conn._pre_rpc(filter_)
+        raw = await self.conn.channel.send_input_netconf(request.channel_input)
+        reply = pygxml.parse(_deframe(raw, self.conn.netconf_version)).get("rpc-reply")
         if not reply.exists():
             raise RpcError("rpc-reply is not found")
         if reply.type_ is not dict:
