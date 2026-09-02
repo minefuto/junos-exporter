@@ -38,17 +38,16 @@ class Parser:
             self.fields.append(field)
             self.paths.extend(candidate.compiled for candidate in field.candidates)
 
-    def parse(self, xml: str) -> list[dict[str, str]]:
-        document = pygxml.parse(xml)
+    def parse(self, reply: pygxml.Result) -> list[dict[str, str]]:
         records = (
             self._to_record(*record)
-            for container in self._containers(document)
+            for container in self._containers(reply)
             for record in self._scan(container, [])
         )
         return [record for record in records if record]
 
-    def _containers(self, document: pygxml.Result) -> list[pygxml.Result]:
-        nodes = [document]
+    def _containers(self, reply: pygxml.Result) -> list[pygxml.Result]:
+        nodes = [reply]
         for segment in self.container:
             nodes = [v for n in nodes for k, v in _children(n) if k == segment]
         return nodes

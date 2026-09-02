@@ -127,7 +127,7 @@ class Connector:
             f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
         )
 
-    async def _get_rpc(self, filter_: str) -> str:
+    async def _get_rpc(self, filter_: str) -> pygxml.Result:
         response = await self.conn.rpc(filter_=filter_)
         reply = pygxml.parse(response.result).get("rpc-reply")
         if not reply.exists():
@@ -136,16 +136,17 @@ class Connector:
             raise RpcError("rpc-reply is empty")
 
         name, element = next(iter(reply.children()))
-        if _localname(name) != "rpc-error":
-            if element.type_ is dict:
-                return element.to_str()
-            return f"<{name}>{escape(element.to_str())}</{name}>"
+        if _localname(name) == "rpc-error":
+            message = element.get("error-message")
+            raise RpcError(message.to_str() or "unknown rpc error")
+        return element
 
-        message = element.get("error-message")
-        raise RpcError(message.to_str() or "unknown rpc error")
+    async def get(self, name: str, table: Table) -> pygxml.Result | None:
+        """Sends the table's rpc and returns the reply element.
 
-    async def get(self, name: str, table: Table) -> str | None:
-        """Sends the table's rpc and returns the reply element as a string."""
+        The result borrows the response buffer, so it keeps that buffer alive
+        for as long as the caller holds on to it.
+        """
         args = []
         for arg, value in table.args.items():
             if value is False:

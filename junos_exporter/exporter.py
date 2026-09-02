@@ -182,15 +182,15 @@ class Exporter:
         exposition: list[str] = []
         up_status: int = 1
         for collector in self.collectors:
-            xml = await connector.get(collector.name, collector.table)
-            if xml is None:
+            reply = await connector.get(collector.name, collector.table)
+            if reply is None:
                 up_status = 0
                 continue
 
             logger.debug(
                 f"Start to parse rpc reply(Target: {connector.target}, Table: {collector.name})"
             )
-            items = collector.parser.parse(xml)
+            items = collector.parser.parse(reply)
             logger.debug(
                 f"Completed to parse rpc reply(Target: {connector.target}, Table: {collector.name}, Records: {len(items)})"
             )

@@ -72,14 +72,14 @@ async def debug(
         )
 
     definition = app.state.tables[table]
-    xml = await connector.get(table, definition)
-    if xml is None:
+    reply = await connector.get(table, definition)
+    if reply is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Could not get rpc reply(Target: {connector.target}, Table: {table})",
         )
 
     return Response(
-        content=json.dumps(Parser(definition).parse(xml), indent=2),
+        content=json.dumps(Parser(definition).parse(reply), indent=2),
         media_type="application/json",
     )
