@@ -4,8 +4,9 @@ from math import isfinite, isnan
 
 from fastapi import HTTPException, status
 
-from junos_exporter.config import Config, Label, Metric, logger
+from junos_exporter.config import Config, Label, Metric, Table, logger
 from junos_exporter.connector import Connector
+from junos_exporter.parser import Parser
 
 UnixtimeFormats = list[tuple[re.Pattern[str], tuple[str, ...] | None]]
 
@@ -22,7 +23,8 @@ class MetricConverter:
             self.name = f"{prefix}_{metric.name}_total"
         else:
             self.name = f"{prefix}_{metric.name}"
-        self.value_name = metric.value
+        self.key = metric.key if metric.path else ""
+        self.value = metric.value
         self.type_ = metric.type_
         self.help_ = metric.help_
         self.regex = metric.regex
@@ -48,17 +50,14 @@ class MetricConverter:
     def _convert_label(self, item: dict) -> list[str]:
         label_exposition = []
         for label in self.labels:
-            if label.value not in item:
-                continue
-
-            if item[label.value] is None:
+            if label.key not in item:
                 continue
 
             if not label.regex:
-                label_exposition.append(f'{label.name}="{item[label.value]}"')
+                label_exposition.append(f'{label.name}="{item[label.key]}"')
                 continue
 
-            match = label.regex.match(item[label.value])
+            match = label.regex.match(item[label.key])
             if match is None:
                 continue
             else:
@@ -83,28 +82,25 @@ class MetricConverter:
 
         for item in items:
             label_exposition = ",".join(self._convert_label(item))
-            if self.value_name not in item:
-                try:
-                    # static value
-                    exposition.append(
-                        f"{self.name}{{{label_exposition}}} {to_prom(float(self.value_name))}\n"
-                    )
-                    continue
-                except ValueError:
-                    logger.debug(
-                        f"Could not convert metric value(Name: {self.name}, Value: {self.value_name}, Error: value does not exist)"
-                    )
-                    continue
-
-            value = item[self.value_name]
-            if value is None:
+            if self.value is not None:
+                exposition.append(
+                    f"{self.name}{{{label_exposition}}} {to_prom(self.value)}\n"
+                )
                 continue
+
+            if self.key not in item:
+                logger.debug(
+                    f"Could not convert metric value(Name: {self.name}, Path: {self.key}, Error: path was not resolved)"
+                )
+                continue
+
+            value = item[self.key]
 
             if self.regex is not None:
                 match = self.regex.match(value)
                 if match is None:
                     logger.debug(
-                        f"Could not convert metric value(Name: {self.name}, Value({self.value_name}): {value}, Regex: {self.regex}, Error: could not match regex)"
+                        f"Could not convert metric value(Name: {self.name}, Path: {self.key}, Value: {value}, Regex: {self.regex}, Error: could not match regex)"
                     )
                     continue
                 else:
@@ -128,39 +124,51 @@ class MetricConverter:
                     )
                 except ValueError:
                     logger.debug(
-                        f"Could not convert metric value(Metric: {self.name}, Value({self.value_name}): {value}, Error: could not convert type to float)"
+                        f"Could not convert metric value(Metric: {self.name}, Path: {self.key}, Value: {value}, Error: could not convert type to float)"
                     )
         return "".join(exposition)
 
 
-class Exporter:
+class TableCollector:
     def __init__(
-        self, converter: dict[str, list[MetricConverter]], prefix: str
+        self, name: str, table: Table, converters: list[MetricConverter]
     ) -> None:
-        self.converter = converter
+        self.name = name
+        self.table = table
+        self.parser = Parser(table)
+        self.converters = converters
+
+
+class Exporter:
+    def __init__(self, collectors: list[TableCollector], prefix: str) -> None:
+        self.collectors = collectors
         self.prefix = prefix
 
     async def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
         up_status: int = 1
-        for name, metrics in self.converter.items():
-            items = await connector.collect(name)
-            if items is None:
+        for collector in self.collectors:
+            reply = await connector.get(collector.name, collector.table)
+            if reply is None:
                 up_status = 0
                 continue
 
+            logger.debug(
+                f"Start to parse rpc reply(Target: {connector.target}, Table: {collector.name})"
+            )
+            items = collector.parser.parse(reply)
+            logger.debug(
+                f"Completed to parse rpc reply(Target: {connector.target}, Table: {collector.name}, Records: {len(items)})"
+            )
+
             if not items:
                 logger.debug(
-                    f"Table items are empty(Target: {connector.target}, Table: {name})"
+                    f"Table items are empty(Target: {connector.target}, Table: {collector.name})"
                 )
                 continue
 
-            logger.debug(
-                f"Start to convert table items(Target: {connector.target}, Table: {name})"
-            )
-            exposition.append("\n".join([metric.convert(items) for metric in metrics]))
-            logger.debug(
-                f"Completed to convert table items(Target: {connector.target}, Table: {name})"
+            exposition.append(
+                "\n".join([c.convert(items) for c in collector.converters])
             )
 
         exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")
@@ -171,7 +179,7 @@ class Exporter:
 
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
-        self.converters = {}
+        self.collectors: dict[str, list[TableCollector]] = {}
         self.prefix = config.prefix
         # Week forms must precede day forms: "3w4d 04:33" also matches a day form.
         unixtime_regex: UnixtimeFormats = [
@@ -199,24 +207,28 @@ class ExporterBuilder:
         ]
 
         for name, module in config.modules.items():
-            converter = {}
-            for table in module.tables:
-                converter[table] = [
-                    MetricConverter(
-                        metric,
-                        labels=config.optables[table].labels,
-                        prefix=self.prefix,
-                        unixtime_regex=unixtime_regex,
-                    )
-                    for metric in config.optables[table].metrics
-                ]
-            self.converters[name] = converter
+            self.collectors[name] = [
+                TableCollector(
+                    table,
+                    config.tables[table],
+                    [
+                        MetricConverter(
+                            metric,
+                            labels=config.tables[table].labels,
+                            prefix=self.prefix,
+                            unixtime_regex=unixtime_regex,
+                        )
+                        for metric in config.tables[table].metrics
+                    ],
+                )
+                for table in module.tables
+            ]
 
     def build(self, module_name: str) -> Exporter:
-        if module_name not in self.converters:
+        if module_name not in self.collectors:
             logger.error(f"Module is not defined(Module: {module_name})")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Module is not defined(Module: {module_name})",
             )
-        return Exporter(self.converters[module_name], self.prefix)
+        return Exporter(self.collectors[module_name], self.prefix)

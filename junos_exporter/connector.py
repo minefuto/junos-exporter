@@ -1,25 +1,24 @@
-import os
-import re
 import socket
-from glob import glob
-from importlib.resources import files
 from types import TracebackType
+from xml.sax.saxutils import escape
 
-import yaml
+import pygxml
 from asyncssh.pbe import KeyEncryptionError
 from asyncssh.public_key import KeyImportError
 from fastapi import HTTPException, status
-from jnpr.junos.factory import loadyaml
-from jnpr.junos.factory.cmdtable import CMDTable
-from jnpr.junos.factory.optable import OpTable
-from jnpr.junos.factory.state_machine import StateMachine
-from jnpr.junos.jxml import remove_namespaces_and_spaces
-from lxml import etree
 from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
 from scrapli_netconf import AsyncNetconfDriver
-from textfsm.parser import TextFSMTemplateError
+from scrapli_netconf.constants import NetconfVersion
 
-from junos_exporter.config import Config, Credential, logger
+from junos_exporter.config import Config, Credential, Table, logger
+
+NEW_LINE = 10
+CHUNK_MARKER = 35
+END_OF_MESSAGE = b"]]>]]>"
+
+
+def _localname(tag: str) -> str:
+    return tag.rpartition(":")[2]
 
 
 class RpcError(Exception):
@@ -30,13 +29,46 @@ class RpcError(Exception):
         return f"{self.err}"
 
 
+def _deframe(raw: bytes, netconf_version: NetconfVersion) -> bytes:
+    if netconf_version == NetconfVersion.VERSION_1_0:
+        return raw.replace(END_OF_MESSAGE, b"")
+
+    data = raw.strip()
+    end = len(data)
+    chunks = []
+    cursor = 0
+    while cursor < end:
+        if data[cursor] == NEW_LINE:
+            cursor += 1
+            continue
+        if data[cursor] != CHUNK_MARKER:
+            raise RpcError("chunk marker is not found")
+        cursor += 1
+        if cursor >= end or data[cursor] == CHUNK_MARKER:
+            break
+
+        marker = data.find(b"\n", cursor, cursor + 11)
+        if marker == -1:
+            raise RpcError("chunk size is not found")
+        try:
+            size = int(data[cursor:marker])
+        except ValueError:
+            raise RpcError("chunk size is not a number") from None
+        if size <= 0:
+            raise RpcError("chunk size is not positive")
+
+        cursor = marker + 1
+        chunks.append(data[cursor : cursor + size])
+        cursor += size
+    return b"".join(chunks)
+
+
 class Connector:
     def __init__(
         self,
         target: str,
         backup_connections: list[str],
         credential: Credential,
-        textfsm_dir: str | None,
         ssh_config: str | None,
         timeout_socket: int,
     ) -> None:
@@ -64,7 +96,6 @@ class Connector:
             transport_options=transport_options,
             timeout_socket=timeout_socket,
         )
-        self.textfsm_dir: str | None = textfsm_dir
 
     async def open(self) -> "None":
         try:
@@ -135,179 +166,57 @@ class Connector:
             f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
         )
 
-    async def _get_rpc(self, filter_: str) -> etree._Element:
-        rpc = await self.conn.rpc(filter_=filter_)
-        xml = rpc.xml_result
-        if len(xml) == 0:
+    async def _get_rpc(self, filter_: str) -> pygxml.Result:
+        request = self.conn._pre_rpc(filter_)
+        raw = await self.conn.channel.send_input_netconf(request.channel_input)
+        reply = pygxml.parse(_deframe(raw, self.conn.netconf_version)).get("rpc-reply")
+        if not reply.exists():
+            raise RpcError("rpc-reply is not found")
+        if reply.type_ is not dict:
             raise RpcError("rpc-reply is empty")
 
-        if re.match(r"\{.*\}rpc-reply$", xml.tag) and not re.match(
-            r"\{.*\}rpc-error$", xml[0].tag
-        ):
-            return xml[0]
-        if err := xml.find(
-            ".//{urn:ietf:params:xml:ns:netconf:base:1.0}error-message"
-        ).text:
-            raise RpcError(err)
-        else:
-            raise RpcError("unknown rpc error")
+        name, element = next(iter(reply.children()))
+        if _localname(name) == "rpc-error":
+            message = element.get("error-message")
+            raise RpcError(message.to_str() or "unknown rpc error")
+        return element
 
-    async def _get(self, name: str) -> OpTable | CMDTable | None:
-        if not globals().get(name):
-            logger.error(
-                f"Could not get table items(Target: {self.target}, Table: {name}, Error: OpTable is not defined)"
-            )
-            return None
+    async def get(self, name: str, table: Table) -> pygxml.Result | None:
+        """Sends the table's rpc and returns the reply element.
 
-        if issubclass(globals()[name], OpTable):
-            table = globals()[name]()
-
-            xml_rpc = etree.Element(table.GET_RPC, format="xml-minified")
-            for k, v in table.GET_ARGS.items():
-                if v is True:
-                    etree.SubElement(xml_rpc, k)
-                else:
-                    etree.SubElement(xml_rpc, k.replace("_", "-")).text = v
-            filter_ = etree.tostring(xml_rpc).decode()
-            try:
-                rpc = await self._get_rpc(filter_)
-                table.xml = remove_namespaces_and_spaces(rpc)
-                return table
-            except RpcError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
-                )
-                return None
-
-        elif issubclass(globals()[name], CMDTable):
-            if self.textfsm_dir is None:
-                table = globals()[name]()
+        The result borrows the response buffer, so it keeps that buffer alive
+        for as long as the caller holds on to it.
+        """
+        args = []
+        for arg, value in table.args.items():
+            if value is False:
+                continue
+            tag = arg.replace("_", "-")
+            if value is True:
+                args.append(f"<{tag}/>")
             else:
-                table = globals()[name](template_dir=self.textfsm_dir)
+                args.append(f"<{tag}>{escape(str(value))}</{tag}>")
+        rpc = f'<{table.rpc} format="xml-minified">{"".join(args)}</{table.rpc}>'
 
-            filter_ = (
-                f'<command format="text">{table.GET_CMD} | display xml rpc</command>'
+        logger.debug(f"Start to get rpc reply(Target: {self.target}, Table: {name})")
+        try:
+            reply = await self._get_rpc(rpc)
+        except RpcError as err:
+            logger.error(
+                f"Could not get rpc reply(Target: {self.target}, Table: {name}, RpcError: {err})"
             )
-            try:
-                command = await self._get_rpc(filter_)
-                command[0].set("format", "text")
-                rpc_command = etree.tostring(command[0]).decode()
-
-                rpc = await self._get_rpc(rpc_command)
-                table.data = rpc.text
-                if table.USE_TEXTFSM:
-                    table.output = table._parse_textfsm(
-                        platform=table.PLATFORM, command=table.GET_CMD, raw=rpc.text
-                    )
-                else:
-                    sm = StateMachine(table)
-                    table.output = sm.parse(rpc.text.splitlines())
-                return table
-            except TextFSMTemplateError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, TextFSMTemplateError: {err})"
-                )
-                return None
-            except RpcError as err:
-                logger.error(
-                    f"Could not get table items(Target: {self.target}, Table: {name}, RpcError: {err})"
-                )
-                return None
-        else:
-            raise NotImplementedError
-
-    async def collect(self, name: str) -> list[dict] | None:
-        logger.debug(f"Start to get table items(Target: {self.target}, Table: {name})")
-        table = await self._get(name)
-        if table is None:
             return None
         logger.debug(
-            f"Completed to get table items(Target: {self.target}, Table: {name})"
+            f"Completed to get rpc reply(Target: {self.target}, Table: {name})"
         )
-
-        items = []
-        if isinstance(table, OpTable):
-            for t in table:
-                item = {}
-                try:
-                    if type(t.key) is tuple:
-                        for i, n in enumerate(t.key):
-                            item[f"key.{i}"] = n
-                            item[f"name.{i}"] = n
-                    else:
-                        item["key"] = t.key
-                        item["name"] = t.key
-                except ValueError:
-                    # key is not defined
-                    pass
-
-                for k, v in t.items():
-                    item[k] = v
-                items.append(item)
-        elif isinstance(table, CMDTable):
-            for t in table:
-                key, table = t
-                item = {}
-                if type(key) is tuple:
-                    for i, n in enumerate(key):
-                        item[f"key.{i}"] = n
-                        item[f"name.{i}"] = n
-                else:
-                    item["key"] = key
-                    item["name"] = key
-
-                for k, v in table.items():
-                    item[k] = v
-                items.append(item)
-        else:
-            raise NotImplementedError
-
-        return items
-
-    async def debug(self, name: str) -> list[dict] | None:
-        if globals().get(name):
-            table = await self._get(name)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"OpTable is not defined(OpTable: {name}",
-            )
-        if table is None:
-            return None
-        return table.to_json()
+        return reply
 
 
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
-        self.optabels_dir: str | None = None
-        if os.path.isdir(os.path.expanduser("~/.junos-exporter/op")):
-            self.optables_dir = os.path.expanduser("~/.junos-exporter/op")
-        elif os.path.isdir("./op"):
-            self.optables_dir = "./op"
-        else:
-            self.optables_dir = str(files("junos_exporter").joinpath("op"))
-
-        self.textfsm_dir: str | None = None
-        if os.path.isdir(os.path.expanduser("~/.junos-exporter/textfsm")):
-            self.textfsm_dir = os.path.abspath(
-                os.path.expanduser("~/.junos-exporter/textfsm")
-            )
-        elif os.path.isdir("./textfsm"):
-            self.textfsm_dir = os.path.abspath("./textfsm")
-        else:
-            self.optables_dir = str(files("junos_exporter").joinpath("textfsm"))
-
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
         self.timeout_socket: int = config.timeout_socket
-        self._load_optables()
-
-    def _load_optables(self) -> None:
-        if self.optables_dir is None:
-            return
-        for yml in glob(f"{self.optables_dir}/*"):
-            if re.match(r".+\.(yml|yaml)$", yml):
-                globals().update(loadyaml(yaml.safe_load(yml)))
 
     def build(self, target_text: str, credential_name: str) -> Connector:
         targets = target_text.split(",")
@@ -330,7 +239,6 @@ class ConnecterBuilder:
             target=target,
             backup_connections=backup_connections,
             credential=self.credentials[credential_name],
-            textfsm_dir=self.textfsm_dir,
             ssh_config=self.ssh_config,
             timeout_socket=self.timeout_socket,
         )
