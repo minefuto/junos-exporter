@@ -1,4 +1,5 @@
 import argparse
+from importlib.metadata import version
 
 import uvicorn
 
@@ -80,6 +81,12 @@ def cli() -> None:
         type=str,
         default="",
         help='root path[default: ""]',
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=version("junos-exporter"),
+        help="show version number and exit",
     )
     parser.add_argument(
         "--workers",

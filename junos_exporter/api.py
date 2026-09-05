@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
@@ -24,7 +25,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
-app = FastAPI(title="junos-exporter", lifespan=lifespan)
+app = FastAPI(
+    title="junos-exporter", version=version("junos-exporter"), lifespan=lifespan
+)
 
 
 @app.exception_handler(StarletteHTTPException)

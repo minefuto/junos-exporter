@@ -1,6 +1,6 @@
 [project]
 name = "junos-exporter"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Prometheus Exporter for Junos using pygxml path queries"
 authors = [
   {name = "minefuto", email = "minefuto@gmail.com"}
@@ -26,7 +26,7 @@ classifiers = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project.urls]
@@ -41,6 +41,9 @@ dev = [
     "ty>=0.0.16",
     "types-pyyaml>=6.0.12.20241230",
 ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel.force-include]
 "config.yml" = "junos_exporter/config.yml"
