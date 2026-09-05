@@ -28,7 +28,7 @@ pip install junos-exporter
    ```
 
 2. Configure the `config.yml`
-   > **Note**: 0.1.0 replaces the PyEZ Table/View format used up to 0.0.12. The RPC and the rules for reading its reply are now written as [pygxml](https://github.com/minefuto/pygxml) paths in the `tables` section of `config.yml` itself.
+   > **Note**: 0.1.0 replaces the PyEZ Table/View format used up to 0.0.12. The RPC and the rules for reading its reply are now written as [pygxml](https://github.com/minefuto/pygxml) paths in the `probes` section of `config.yml` itself.
 
    ```yaml
    general:
@@ -148,37 +148,37 @@ e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
 In your Prometheus configuration, setting `__params_module` to `router` ensures the corresponding modules are used.
 If the `module` parameter is omitted, the `default` profile will be used.
 
-### Bundled tables
+### Bundled probes
 
-The bundled `config.yml` defines 20 tables covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module.
+The bundled `config.yml` defines 20 probes covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module.
 
-| table | rpc | command |
+| probe | rpc | command |
 | --- | --- | --- |
-| `SystemAlarmStatus` | `get-system-alarm-information` | `show system alarms` |
-| `ChassisAlarmStatus` | `get-alarm-information` | `show chassis alarms` |
-| `FpcStatus` | `get-fpc-information` | `show chassis fpc` |
-| `HardwareStatus` | `get-chassis-inventory` | `show chassis hardware` |
-| `EnvironmentStatus` | `get-environment-information` | `show chassis environment` |
-| `RoutingEngineStatus` | `get-route-engine-information` | `show chassis routing-engine` |
-| `StorageStatus` | `get-system-storage` | `show system storage` |
-| `PhysicalInterfaceStatus` | `get-interface-information` | `show interfaces extensive` |
-| `LogicalInterfaceStatus` | `get-interface-information` | `show interfaces detail` |
-| `InterfaceOpticStatus` | `get-interface-optics-diagnostics-information` | `show interfaces diagnostics optics` |
-| `LldpStatus` | `get-lldp-neighbors-information` | `show lldp neighbors` |
-| `LacpStatus` | `get-lacp-interface-information` | `show lacp interfaces` |
-| `RouteStatus` | `get-route-summary-information` | `show route summary` |
-| `ArpStatus` | `get-arp-table-information` | `show arp expiration-time` |
-| `OspfInterfaceStatus` | `get-ospf-interface-information` | `show ospf interface detail` |
-| `OspfNeighborStatus` | `get-ospf-neighbor-information` | `show ospf neighbor extensive` |
-| `BgpStatus` | `get-bgp-summary-information` | `show bgp summary` |
-| `BgpRouteStatus` | `get-bgp-summary-information` | `show bgp summary` |
-| `VrrpStatus` | `get-vrrp-information` | `show vrrp detail` |
-| `BfdStatus` | `get-bfd-session-information` | `show bfd session` |
+| `system_alarm_status` | `get-system-alarm-information` | `show system alarms` |
+| `chassis_alarm_status` | `get-alarm-information` | `show chassis alarms` |
+| `fpc_status` | `get-fpc-information` | `show chassis fpc` |
+| `hardware_status` | `get-chassis-inventory` | `show chassis hardware` |
+| `environment_status` | `get-environment-information` | `show chassis environment` |
+| `routing_engine_status` | `get-route-engine-information` | `show chassis routing-engine` |
+| `storage_status` | `get-system-storage` | `show system storage` |
+| `physical_interface_status` | `get-interface-information` | `show interfaces extensive` |
+| `logical_interface_status` | `get-interface-information` | `show interfaces detail` |
+| `interface_optic_status` | `get-interface-optics-diagnostics-information` | `show interfaces diagnostics optics` |
+| `lldp_status` | `get-lldp-neighbors-information` | `show lldp neighbors` |
+| `lacp_status` | `get-lacp-interface-information` | `show lacp interfaces` |
+| `route_status` | `get-route-summary-information` | `show route summary` |
+| `arp_status` | `get-arp-table-information` | `show arp expiration-time` |
+| `ospf_interface_status` | `get-ospf-interface-information` | `show ospf interface detail` |
+| `ospf_neighbor_status` | `get-ospf-neighbor-information` | `show ospf neighbor extensive` |
+| `bgp_status` | `get-bgp-summary-information` | `show bgp summary` |
+| `bgp_route_status` | `get-bgp-summary-information` | `show bgp summary` |
+| `vrrp_status` | `get-vrrp-information` | `show vrrp detail` |
+| `bfd_status` | `get-bfd-session-information` | `show bfd session` |
 
 
-### Defining a table
+### Defining a probe
 
-A table is one RPC plus the rules for reading its reply. The reply XML is scanned into **records** (a flat `path -> value` mapping), and each record becomes one metric sample.
+A probe is one RPC plus the rules for reading its reply. The reply XML is scanned into **records** (a flat `path -> value` mapping), and each record becomes one metric sample.
 
 Records are cut out of the reply like this:
 
@@ -213,11 +213,11 @@ For example, `show vrrp detail` returns each VR as a `vrrp-vlan` element followe
 </vrrp-information>
 ```
 
-The bundled `VrrpStatus` table reads it as follows. `physical-interface` and `unit` are found by rule (a), the rest by rule (b), and the `mode` label lists two paths so that the second record falls back to the nested one.
+The bundled `vrrp_status` probe reads it as follows. `physical-interface` and `unit` are found by rule (a), the rest by rule (b), and the `mode` label lists two paths so that the second record falls back to the nested one.
 
 ```yaml
-tables:
-  VrrpStatus:
+probes:
+  vrrp_status:
     rpc: get-vrrp-information
     container: vrrp-interface
     item: vrrp-vlan
@@ -255,7 +255,7 @@ junos_vrrp_state{interface="xe-0/0/0",unit="1",mode="active",group="10"} 5.0
 junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
 ```
 
-#### tables
+#### probes
 
 | key | type | default | description |
 | --- | --- | --- | --- |
@@ -265,7 +265,7 @@ junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
 | `item` | str \| list[str] | required | Element name that begins a record |
 | `recursive` | bool | `false` | Also look for `item` further down the tree, for replies nested to an arbitrary depth such as `show chassis hardware` |
 | `metrics` | list | `[]` | Metric definitions, see below |
-| `labels` | list | `[]` | Label definitions applied to every metric of the table, see below |
+| `labels` | list | `[]` | Label definitions applied to every metric of the probe, see below |
 
 #### paths
 
@@ -324,7 +324,7 @@ A label whose path is missing from the record is omitted. Splitting `xe-0/0/0.1`
         regex: .*\.(\d+)
 ```
 
-### Checking a table definition
+### Checking a probe definition
 
 Get the RPC reply from the device itself to work out what to write.
 
@@ -339,7 +339,7 @@ show vrrp detail | display xml
 Then `/debug` shows the records the current definition extracts from that reply.
 
 ```sh
-curl 'localhost:9326/debug?target=192.168.1.1&table=VrrpStatus'
+curl 'localhost:9326/debug?target=192.168.1.1&probe=vrrp_status'
 ```
 
 ## License

@@ -19,7 +19,7 @@ from junos_exporter.parser import Parser
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = Config()
     app.state.timeout = config.timeout
-    app.state.tables = config.tables
+    app.state.probes = config.probes
     app.state.exporter = ExporterBuilder(config)
     app.state.connector = ConnecterBuilder(config)
     yield
@@ -66,20 +66,20 @@ async def metrics(
 @app.get("/debug", tags=["debug"])
 async def debug(
     connector: Annotated[Connector, Depends(get_connector)],
-    table: str,
+    probe: str,
 ) -> Response:
-    if table not in app.state.tables:
+    if probe not in app.state.probes:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Table is not defined(Table: {table})",
+            detail=f"Probe is not defined(Probe: {probe})",
         )
 
-    definition = app.state.tables[table]
-    reply = await connector.get(table, definition)
+    definition = app.state.probes[probe]
+    reply = await connector.get(probe, definition)
     if reply is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not get rpc reply(Target: {connector.target}, Table: {table})",
+            detail=f"Could not get rpc reply(Target: {connector.target}, Probe: {probe})",
         )
 
     return Response(

@@ -10,7 +10,7 @@ from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNot
 from scrapli_netconf import AsyncNetconfDriver
 from scrapli_netconf.constants import NetconfVersion
 
-from junos_exporter.config import Config, Credential, Table, logger
+from junos_exporter.config import Config, Credential, Probe, logger
 
 NEW_LINE = 10
 CHUNK_MARKER = 35
@@ -181,14 +181,14 @@ class Connector:
             raise RpcError(message.to_str() or "unknown rpc error")
         return element
 
-    async def get(self, name: str, table: Table) -> pygxml.Result | None:
-        """Sends the table's rpc and returns the reply element.
+    async def get(self, name: str, probe: Probe) -> pygxml.Result | None:
+        """Sends the probe's rpc and returns the reply element.
 
         The result borrows the response buffer, so it keeps that buffer alive
         for as long as the caller holds on to it.
         """
         args = []
-        for arg, value in table.args.items():
+        for arg, value in probe.args.items():
             if value is False:
                 continue
             tag = arg.replace("_", "-")
@@ -196,18 +196,18 @@ class Connector:
                 args.append(f"<{tag}/>")
             else:
                 args.append(f"<{tag}>{escape(str(value))}</{tag}>")
-        rpc = f'<{table.rpc} format="xml-minified">{"".join(args)}</{table.rpc}>'
+        rpc = f'<{probe.rpc} format="xml-minified">{"".join(args)}</{probe.rpc}>'
 
-        logger.debug(f"Start to get rpc reply(Target: {self.target}, Table: {name})")
+        logger.debug(f"Start to get rpc reply(Target: {self.target}, Probe: {name})")
         try:
             reply = await self._get_rpc(rpc)
         except RpcError as err:
             logger.error(
-                f"Could not get rpc reply(Target: {self.target}, Table: {name}, RpcError: {err})"
+                f"Could not get rpc reply(Target: {self.target}, Probe: {name}, RpcError: {err})"
             )
             return None
         logger.debug(
-            f"Completed to get rpc reply(Target: {self.target}, Table: {name})"
+            f"Completed to get rpc reply(Target: {self.target}, Probe: {name})"
         )
         return reply
 

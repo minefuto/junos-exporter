@@ -11,30 +11,30 @@ credentials:
 
 modules:
   default:
-    tables:
-      - SystemAlarmStatus
-      - ChassisAlarmStatus
-      - FpcStatus
-      - HardwareStatus
-      - EnvironmentStatus
-      - RoutingEngineStatus
-      - StorageStatus
-      - PhysicalInterfaceStatus
-      - LogicalInterfaceStatus
-      - InterfaceOpticStatus
-      - LldpStatus
-      - LacpStatus
-      - RouteStatus
-      - ArpStatus
-      - OspfInterfaceStatus
-      - OspfNeighborStatus
-      - BgpStatus
-      - BgpRouteStatus
-      - VrrpStatus
-      - BfdStatus
+    probes:
+      - system_alarm_status
+      - chassis_alarm_status
+      - fpc_status
+      - hardware_status
+      - environment_status
+      - routing_engine_status
+      - storage_status
+      - physical_interface_status
+      - logical_interface_status
+      - interface_optic_status
+      - lldp_status
+      - lacp_status
+      - route_status
+      - arp_status
+      - ospf_interface_status
+      - ospf_neighbor_status
+      - bgp_status
+      - bgp_route_status
+      - vrrp_status
+      - bfd_status
 
-tables:
-  SystemAlarmStatus:
+probes:
+  system_alarm_status:
     rpc: get-system-alarm-information
     item: alarm-detail
     metrics:
@@ -51,7 +51,7 @@ tables:
       - name: type
         path: alarm-type
 
-  ChassisAlarmStatus:
+  chassis_alarm_status:
     rpc: get-alarm-information
     item: alarm-detail
     metrics:
@@ -68,7 +68,7 @@ tables:
       - name: type
         path: alarm-type
 
-  FpcStatus:
+  fpc_status:
     rpc: get-fpc-information
     item: fpc
     recursive: True
@@ -98,7 +98,7 @@ tables:
       - name: slot
         path: slot
 
-  HardwareStatus:
+  hardware_status:
     rpc: get-chassis-inventory
     item:
       - chassis
@@ -122,7 +122,7 @@ tables:
       - name: description
         path: description
 
-  EnvironmentStatus:
+  environment_status:
     rpc: get-environment-information
     item: environment-item
     metrics:
@@ -140,7 +140,7 @@ tables:
       - name: name
         path: name
 
-  RoutingEngineStatus:
+  routing_engine_status:
     rpc: get-route-engine-information
     item: route-engine
     metrics:
@@ -185,7 +185,7 @@ tables:
       - name: slot
         path: slot
 
-  StorageStatus:
+  storage_status:
     rpc: get-system-storage
     item: filesystem
     metrics:
@@ -199,7 +199,7 @@ tables:
       - name: mounted_on
         path: mounted-on
 
-  PhysicalInterfaceStatus:
+  physical_interface_status:
     rpc: get-interface-information
     args:
       extensive: True
@@ -342,7 +342,7 @@ tables:
       - name: description
         path: description
 
-  LogicalInterfaceStatus:
+  logical_interface_status:
     rpc: get-interface-information
     args:
       detail: True
@@ -392,7 +392,7 @@ tables:
       - name: description
         path: description
 
-  InterfaceOpticStatus:
+  interface_optic_status:
     rpc: get-interface-optics-diagnostics-information
     args:
       interface_name: '[efgx][et]-*'
@@ -410,7 +410,7 @@ tables:
       - name: interface
         path: name
 
-  LldpStatus:
+  lldp_status:
     rpc: get-lldp-neighbors-information
     item: lldp-neighbor-information
     metrics:
@@ -426,7 +426,7 @@ tables:
       - name: remote_interface
         path: lldp-remote-port-id
 
-  LacpStatus:
+  lacp_status:
     rpc: get-lacp-interface-information
     container: lacp-interface-information
     item: lag-lacp-protocol
@@ -464,7 +464,7 @@ tables:
       - name: interface
         path: name
 
-  RouteStatus:
+  route_status:
     rpc: get-route-summary-information
     container: route-table
     item: protocols
@@ -483,7 +483,7 @@ tables:
       - name: protocol
         path: protocol-name
 
-  ArpStatus:
+  arp_status:
     rpc: get-arp-table-information
     args:
       expiration-time: True
@@ -506,7 +506,7 @@ tables:
         path: interface-name
         regex: .*\.(\d+)
 
-  OspfInterfaceStatus:
+  ospf_interface_status:
     rpc: get-ospf-interface-information
     args:
       detail: True
@@ -526,7 +526,7 @@ tables:
       - name: area
         path: ospf-area
 
-  OspfNeighborStatus:
+  ospf_neighbor_status:
     rpc: get-ospf-neighbor-information
     args:
       extensive: True
@@ -562,7 +562,7 @@ tables:
       - name: area
         path: ospf-area
 
-  BgpStatus:
+  bgp_status:
     rpc: get-bgp-summary-information
     item: bgp-peer
     metrics:
@@ -596,7 +596,7 @@ tables:
       - name: description
         path: description
 
-  BgpRouteStatus:
+  bgp_route_status:
     rpc: get-bgp-summary-information
     container: bgp-peer
     item: bgp-rib
@@ -629,7 +629,7 @@ tables:
       - name: table
         path: name
 
-  VrrpStatus:
+  vrrp_status:
     rpc: get-vrrp-information
     args:
       detail: True
@@ -669,7 +669,7 @@ tables:
       - name: group
         path: group
 
-  BfdStatus:
+  bfd_status:
     rpc: get-bfd-session-information
     item: bfd-session
     metrics:

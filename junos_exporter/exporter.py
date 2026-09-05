@@ -4,7 +4,7 @@ from math import isfinite, isnan
 
 from fastapi import HTTPException, status
 
-from junos_exporter.config import Config, Label, Metric, Table, logger
+from junos_exporter.config import Config, Label, Metric, Probe, logger
 from junos_exporter.connector import Connector
 from junos_exporter.parser import Parser
 
@@ -129,18 +129,18 @@ class MetricConverter:
         return "".join(exposition)
 
 
-class TableCollector:
+class ProbeCollector:
     def __init__(
-        self, name: str, table: Table, converters: list[MetricConverter]
+        self, name: str, probe: Probe, converters: list[MetricConverter]
     ) -> None:
         self.name = name
-        self.table = table
-        self.parser = Parser(table)
+        self.probe = probe
+        self.parser = Parser(probe)
         self.converters = converters
 
 
 class Exporter:
-    def __init__(self, collectors: list[TableCollector], prefix: str) -> None:
+    def __init__(self, collectors: list[ProbeCollector], prefix: str) -> None:
         self.collectors = collectors
         self.prefix = prefix
 
@@ -148,27 +148,27 @@ class Exporter:
         exposition: list[str] = []
         up_status: int = 1
         for collector in self.collectors:
-            reply = await connector.get(collector.name, collector.table)
+            reply = await connector.get(collector.name, collector.probe)
             if reply is None:
                 up_status = 0
                 continue
 
             logger.debug(
-                f"Start to parse rpc reply(Target: {connector.target}, Table: {collector.name})"
+                f"Start to parse rpc reply(Target: {connector.target}, Probe: {collector.name})"
             )
-            items = collector.parser.parse(reply)
+            records = collector.parser.parse(reply)
             logger.debug(
-                f"Completed to parse rpc reply(Target: {connector.target}, Table: {collector.name}, Records: {len(items)})"
+                f"Completed to parse rpc reply(Target: {connector.target}, Probe: {collector.name}, Records: {len(records)})"
             )
 
-            if not items:
+            if not records:
                 logger.debug(
-                    f"Table items are empty(Target: {connector.target}, Table: {collector.name})"
+                    f"Probe records are empty(Target: {connector.target}, Probe: {collector.name})"
                 )
                 continue
 
             exposition.append(
-                "\n".join([c.convert(items) for c in collector.converters])
+                "\n".join([c.convert(records) for c in collector.converters])
             )
 
         exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")
@@ -179,7 +179,7 @@ class Exporter:
 
 class ExporterBuilder:
     def __init__(self, config: Config) -> None:
-        self.collectors: dict[str, list[TableCollector]] = {}
+        self.collectors: dict[str, list[ProbeCollector]] = {}
         self.prefix = config.prefix
         # Week forms must precede day forms: "3w4d 04:33" also matches a day form.
         unixtime_regex: UnixtimeFormats = [
@@ -208,20 +208,20 @@ class ExporterBuilder:
 
         for name, module in config.modules.items():
             self.collectors[name] = [
-                TableCollector(
-                    table,
-                    config.tables[table],
+                ProbeCollector(
+                    probe,
+                    config.probes[probe],
                     [
                         MetricConverter(
                             metric,
-                            labels=config.tables[table].labels,
+                            labels=config.probes[probe].labels,
                             prefix=self.prefix,
                             unixtime_regex=unixtime_regex,
                         )
-                        for metric in config.tables[table].metrics
+                        for metric in config.probes[probe].metrics
                     ],
                 )
-                for table in module.tables
+                for probe in module.probes
             ]
 
     def build(self, module_name: str) -> Exporter:

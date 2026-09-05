@@ -47,17 +47,17 @@ class Credential(BaseModel):
 
 
 class Module(BaseModel):
-    tables: list[str]
+    probes: list[str]
 
-    @field_validator("tables", mode="before")
+    @field_validator("probes", mode="before")
     @classmethod
-    def check_exist_tables(cls, tables: list[str], info: ValidationInfo) -> list[str]:
+    def check_exist_probes(cls, probes: list[str], info: ValidationInfo) -> list[str]:
         if isinstance(info.context, dict):
-            defined = info.context.get("tables", dict())
-            for table in tables:
-                if table not in defined:
-                    raise ValueError(f"table({table}) does not contain tables")
-        return tables
+            defined = info.context.get("probes", dict())
+            for probe in probes:
+                if probe not in defined:
+                    raise ValueError(f"probe({probe}) is not defined in probes")
+        return probes
 
 
 class PathSpec(BaseModel):
@@ -168,7 +168,7 @@ class Metric(PathSpec):
         return self
 
 
-class Table(BaseModel):
+class Probe(BaseModel):
     rpc: str
     args: dict[str, str | bool] = Field(default_factory=dict)
     container: str = ""
@@ -198,7 +198,7 @@ class Table(BaseModel):
         return [item] if isinstance(item, str) else item
 
     @model_validator(mode="after")
-    def check_specs(self) -> "Table":
+    def check_specs(self) -> "Probe":
         dedup_specs([*self.metrics, *self.labels])
         return self
 
@@ -237,16 +237,16 @@ class Config:
             }
             self.modules = {
                 name: Module.model_validate(
-                    module, context={"tables": config["tables"]}
+                    module, context={"probes": config["probes"]}
                 )
                 for name, module in config["modules"].items()
             }
-            self.tables: dict[str, Table] = {}
-            for name, table in config["tables"].items():
+            self.probes: dict[str, Probe] = {}
+            for name, probe in config["probes"].items():
                 try:
-                    self.tables[name] = Table(**table)
+                    self.probes[name] = Probe(**probe)
                 except ValidationError as e:
-                    sys.exit(f"failed to load config file.\ntable({name})\n{e}")
+                    sys.exit(f"failed to load config file.\nprobe({name})\n{e}")
         except ValidationError as e:
             sys.exit(f"failed to load config file.\n{e}")
         except KeyError as e:
