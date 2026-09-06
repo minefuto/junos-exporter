@@ -13,6 +13,11 @@ To allow `junos-exporter` connectivity via NETCONF over SSH, ensure the followin
 set system service netconf ssh
 ```
 
+> **Note**: 0.1.0 introduces the following breaking changes from 0.0.12.
+> - Change the parser from PyEZ Tables and Views to [pygxml](https://github.com/minefuto/pygxml).
+> - Change the `config.yml` format.
+> - Change the scrape endpoint from `/metrics` to `/probe`.
+
 ## Installation
 
 ```shell
@@ -37,7 +42,6 @@ pip install junos-exporter
    The exporter looks for `./config.yml` first, then `~/.junos-exporter/config.yml`, and layers the first one it finds.
 
 2. Configure the `config.yml`
-   > **Note**: 0.1.0 replaces the PyEZ Table/View format used up to 0.0.12. The RPC and the rules for reading its reply are now written as [pygxml](https://github.com/minefuto/pygxml) paths in the `probes` section of `config.yml` itself.
 
    Anything under `general` is overridden key by key, while `credentials`, `modules` and `probes` are overridden by the names directly under them -- a name that already exists in the bundled config is replaced whole.
 
@@ -55,8 +59,6 @@ pip install junos-exporter
    ```
 
    To customize a probe, copy just that probe from the [bundled `config.yml`](junos_exporter/config.yml) into yours and edit it. Probes you do not copy keep following the bundled definitions as they are updated.
-
-   > **Note**: Adding a probe is not enough on its own -- the bundled `modules.default` only lists the 20 bundled probes, so you also need to redefine the module that should collect it.
 
 3. Configure the Prometheus
 
