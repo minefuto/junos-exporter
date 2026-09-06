@@ -20,9 +20,6 @@ from pydantic import (
 
 logger = getLogger("uvicorn.error")
 
-XML_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*$")
-PROMETHEUS_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
-
 
 class General(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -118,13 +115,6 @@ class Label(PathSpec):
     name: str
     regex: re.Pattern | None = None
 
-    @field_validator("name", mode="after")
-    @classmethod
-    def check_prometheus_name(cls, name: str) -> str:
-        if not PROMETHEUS_NAME.match(name):
-            raise ValueError(f"name({name}) is not a valid prometheus label name")
-        return name
-
     @field_validator("regex", mode="before")
     @classmethod
     def to_re_pattern(cls, regex: str) -> re.Pattern:
@@ -147,13 +137,6 @@ class Metric(PathSpec):
     regex: re.Pattern | None = None
     value_transform: defaultdict[str | bool, float] | None = None
     to_unixtime: bool = False
-
-    @field_validator("name", mode="after")
-    @classmethod
-    def check_prometheus_name(cls, name: str) -> str:
-        if not PROMETHEUS_NAME.match(name):
-            raise ValueError(f"name({name}) is not a valid prometheus metric name")
-        return name
 
     @field_validator("regex", mode="before")
     @classmethod
@@ -186,21 +169,6 @@ class Probe(BaseModel):
     recursive: bool = False
     metrics: list[Metric] = Field(default_factory=list)
     labels: list[Label] = Field(default_factory=list)
-
-    @field_validator("rpc", mode="after")
-    @classmethod
-    def check_xml_name(cls, rpc: str) -> str:
-        if not XML_NAME.match(rpc):
-            raise ValueError(f"rpc({rpc}) is not a valid xml element name")
-        return rpc
-
-    @field_validator("args", mode="after")
-    @classmethod
-    def check_xml_names(cls, args: dict[str, str | bool]) -> dict[str, str | bool]:
-        for arg in args:
-            if not XML_NAME.match(arg.replace("_", "-")):
-                raise ValueError(f"arg({arg}) is not a valid xml element name")
-        return args
 
     @field_validator("item", mode="before")
     @classmethod
