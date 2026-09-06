@@ -63,6 +63,7 @@ pip install junos-exporter
    ```yaml
    scrape_configs:
      - job_name: "junos-exporter"
+       metrics_path: /probe
        static_configs:
          - targets:
              - "192.168.1.1"  # Target device
@@ -118,7 +119,7 @@ options:
 ## Credentials
 
 This exporter allows you to configure specific authentication methods for each Junos device. To select a profile defined in the `credentials` section of your `config.yml`, add the credential query parameter to the scrape URL.  
-e.g. http://localhost:9326/metrics?credential=vjunos&target=192.168.10.12
+e.g. http://localhost:9326/probe?credential=vjunos&target=192.168.10.12
 ```yaml
 credentials:
   default: # password authentication
@@ -136,6 +137,7 @@ If the `credential` parameter is omitted, the `default` profile will be used.
 ```yaml
 scrape_configs:
   - job_name: "junos-exporter"
+    metrics_path: /probe
     static_configs:
       - targets:
           - "192.168.1.1"  # Target device using "default" credential
@@ -158,7 +160,7 @@ scrape_configs:
 
 This exporter allows you to configure which metrics are scraped for each Junos device.
 To use a specific profile defined in the `modules` section of your `config.yml`, add the module query parameter to the scrape URL.  
-e.g. http://localhost:9326/metrics?module=router&target=192.168.10.12
+e.g. http://localhost:9326/probe?module=router&target=192.168.10.12
 
 In your Prometheus configuration, setting `__params_module` to `router` ensures the corresponding modules are used.
 If the `module` parameter is omitted, the `default` profile will be used.

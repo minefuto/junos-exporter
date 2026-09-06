@@ -44,8 +44,8 @@ async def get_connector(
         yield connector
 
 
-@app.get("/metrics", tags=["exporter"], response_class=PlainTextResponse)
-async def metrics(
+@app.get("/probe", tags=["exporter"], response_class=PlainTextResponse)
+async def probe(
     connector: Annotated[Connector, Depends(get_connector)], module: str = "default"
 ) -> str:
     exporter: Exporter = app.state.exporter.build(module)
