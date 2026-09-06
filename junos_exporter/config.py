@@ -25,6 +25,8 @@ PROMETHEUS_NAME = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class General(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prefix: str = "junos"
     timeout: int = 60
     timeout_socket: int = 15
@@ -32,7 +34,9 @@ class General(BaseModel):
 
     @field_validator("ssh_config", mode="after")
     @classmethod
-    def check_exist_file(cls, path: str) -> str:
+    def check_exist_file(cls, path: str | None) -> str | None:
+        if path is None:
+            return None
         abs_path = os.path.abspath(os.path.expanduser(path))
         if not os.path.isfile(abs_path):
             raise ValueError(f"file({abs_path}) does not exist")
@@ -40,6 +44,8 @@ class General(BaseModel):
 
 
 class Credential(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     username: str
     password: str = ""
     private_key: str = ""
@@ -47,6 +53,8 @@ class Credential(BaseModel):
 
 
 class Module(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     probes: list[str]
 
     @field_validator("probes", mode="before")
@@ -61,7 +69,7 @@ class Module(BaseModel):
 
 
 class PathSpec(BaseModel):
-    model_config = ConfigDict(coerce_numbers_to_str=True)
+    model_config = ConfigDict(coerce_numbers_to_str=True, extra="forbid")
 
     path: list[str] = Field(default_factory=list)
     exists: bool = False
@@ -169,6 +177,8 @@ class Metric(PathSpec):
 
 
 class Probe(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     rpc: str
     args: dict[str, str | bool] = Field(default_factory=dict)
     container: str = ""
@@ -207,27 +217,63 @@ class Probe(BaseModel):
         return list(dedup_specs([*self.metrics, *self.labels]).values())
 
 
+SECTIONS = ("general", "credentials", "modules", "probes")
+
+OVERLAY_LOCATIONS = ("config.yml", "~/.junos-exporter/config.yml")
+
+
+def load(path: str) -> dict:
+    try:
+        with open(path) as f:
+            config = yaml.safe_load(f)
+    except (OSError, yaml.YAMLError) as e:
+        sys.exit(f"failed to load config file({path}).\n{e}")
+
+    if not isinstance(config, dict):
+        sys.exit(f"failed to load config file({path}).\nroot is not a mapping.")
+
+    for section, value in config.items():
+        if section not in SECTIONS:
+            sys.exit(
+                f"failed to load config file({path}).\nsection({section}) is unknown."
+            )
+        if value is not None and not isinstance(value, dict):
+            sys.exit(
+                f"failed to load config file({path}).\nsection({section}) is not a mapping."
+            )
+    return config
+
+
+def merge(base: dict, overlay: dict) -> dict:
+    merged = {section: dict(value or {}) for section, value in base.items()}
+    for section, value in overlay.items():
+        if value:
+            merged.setdefault(section, {}).update(value)
+    return merged
+
+
+def find_overlay() -> str:
+    found = [
+        path
+        for path in (os.path.expanduser(p) for p in OVERLAY_LOCATIONS)
+        if os.path.isfile(path)
+    ]
+    if not found:
+        logger.warning(
+            f"Config file({' or '.join(OVERLAY_LOCATIONS)}) is not found. "
+            "Running with the bundled default settings"
+        )
+        return ""
+    for path in found[1:]:
+        logger.info(f"Config file({path}) is ignored because {found[0]} is used")
+    return found[0]
+
+
 class Config:
     def __init__(self) -> None:
-        config = {}
-
-        config_location = [
-            "config.yml",
-            os.path.expanduser("~/.junos-exporter/config.yml"),
-            str(files("junos_exporter").joinpath("config.yml")),
-        ]
-        for c in config_location:
-            if os.path.isfile(c):
-                try:
-                    with open(c) as f:
-                        config = yaml.safe_load(f)
-                except yaml.YAMLError as e:
-                    sys.exit(f"failed to load config file.\n{e}")
-
-        if not config:
-            sys.exit(
-                "config file(./config.yml or ~/.junos-exporter/config.yml) is not found."
-            )
+        config = load(str(files("junos_exporter").joinpath("config.yml")))
+        if overlay := find_overlay():
+            config = merge(config, load(overlay))
 
         try:
             self.general = General(**config["general"])

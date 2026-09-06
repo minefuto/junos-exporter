@@ -21,14 +21,25 @@ pip install junos-exporter
 
 ## Usage
 
-1. Setup the `config.yml`
+1. Write your `config.yml`
+
+   The exporter always loads the [bundled `config.yml`](junos_exporter/config.yml) first, which already defines 20 probes and the `default` module. Your own `config.yml` is layered on top of it, so it only needs to carry what you want to change -- usually just the credentials.
 
    ```sh
-   curl -s -o ~/.junos-exporter/config.yml --create-dirs https://raw.githubusercontent.com/minefuto/junos-exporter/refs/heads/main/config.yml
+   mkdir -p ~/.junos-exporter && cat > ~/.junos-exporter/config.yml <<'EOF'
+   credentials:
+     default:
+       username: admin      # Junos device login username
+       password: admin@123  # Junos device login password
+   EOF
    ```
+
+   The exporter looks for `./config.yml` first, then `~/.junos-exporter/config.yml`, and layers the first one it finds.
 
 2. Configure the `config.yml`
    > **Note**: 0.1.0 replaces the PyEZ Table/View format used up to 0.0.12. The RPC and the rules for reading its reply are now written as [pygxml](https://github.com/minefuto/pygxml) paths in the `probes` section of `config.yml` itself.
+
+   Anything under `general` is overridden key by key, while `credentials`, `modules` and `probes` are overridden by the names directly under them -- a name that already exists in the bundled config is replaced whole.
 
    ```yaml
    general:
@@ -36,12 +47,16 @@ pip install junos-exporter
      timeout: 60            # Total timeout for Junos RPC execution and data collection
      timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection
      # ssh_config: ~/.ssh/config  # SSH config for the NETCONF connection, e.g. to reach devices via a jump host
-   
+
    credentials:
      default:
        username: admin      # Junos device login username
        password: admin@123  # Junos device login password
    ```
+
+   To customize a probe, copy just that probe from the [bundled `config.yml`](junos_exporter/config.yml) into yours and edit it. Probes you do not copy keep following the bundled definitions as they are updated.
+
+   > **Note**: Adding a probe is not enough on its own -- the bundled `modules.default` only lists the 20 bundled probes, so you also need to redefine the module that should collect it.
 
 3. Configure the Prometheus
 
@@ -150,7 +165,7 @@ If the `module` parameter is omitted, the `default` profile will be used.
 
 ### Bundled probes
 
-The bundled `config.yml` defines 20 probes covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module.
+The bundled [`config.yml`](junos_exporter/config.yml) defines 20 probes covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module. They are always loaded, so your own `config.yml` only needs to list the ones you want to change.
 
 | probe | rpc | command |
 | --- | --- | --- |
