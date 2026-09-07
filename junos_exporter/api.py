@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from junos_exporter.config import Config, logger
 from junos_exporter.connector import ConnecterBuilder, Connector
+from junos_exporter.errors import DeviceError, ExporterError, RpcError
 from junos_exporter.exporter import Exporter, ExporterBuilder
 from junos_exporter.parser import Parser
 
@@ -37,11 +38,17 @@ async def http_exception_handler(
     return PlainTextResponse(content=str(exc.detail), status_code=exc.status_code)
 
 
-async def get_connector(
-    target: str, credential: str = "default"
-) -> AsyncGenerator[None, None]:
-    async with app.state.connector.build(target, credential) as connector:
-        yield connector
+@app.exception_handler(ExporterError)
+@app.exception_handler(DeviceError)
+@app.exception_handler(RpcError)
+async def error_handler(request: Request, exc: Exception) -> PlainTextResponse:
+    return PlainTextResponse(
+        content=str(exc), status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
+
+
+def get_connector(target: str, credential: str = "default") -> Connector:
+    return app.state.connector.build(target, credential)
 
 
 @app.get("/probe", tags=["exporter"], response_class=PlainTextResponse)
@@ -50,17 +57,17 @@ async def probe(
 ) -> str:
     exporter: Exporter = app.state.exporter.build(module)
     try:
-        return await asyncio.wait_for(
-            exporter.collect(connector), timeout=app.state.timeout
-        )
+        async with connector:
+            return await asyncio.wait_for(
+                exporter.collect(connector), timeout=app.state.timeout
+            )
     except TimeoutError:
         logger.error(
             f"Request timeout(Target: {connector.target}, Timeout: {app.state.timeout})"
         )
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=f"Request timeout(Target: {connector.target}, Timeout: {app.state.timeout})",
-        ) from None
+        return exporter.down()
+    except DeviceError:
+        return exporter.down()
 
 
 @app.get("/debug", tags=["debug"])
@@ -75,14 +82,8 @@ async def debug(
         )
 
     definition = app.state.probes[probe]
-    reply = await connector.get(probe, definition)
-    if reply is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not get rpc reply(Target: {connector.target}, Probe: {probe})",
-        )
+    async with connector:
+        reply = await connector.get(probe, definition)
+        content = json.dumps(Parser(definition).parse(reply), indent=2)
 
-    return Response(
-        content=json.dumps(Parser(definition).parse(reply), indent=2),
-        media_type="application/json",
-    )
+    return Response(content=content, media_type="application/json")

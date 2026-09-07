@@ -5,28 +5,27 @@ from xml.sax.saxutils import escape
 import pygxml
 from asyncssh.pbe import KeyEncryptionError
 from asyncssh.public_key import KeyImportError
-from fastapi import HTTPException, status
-from scrapli.exceptions import ScrapliAuthenticationFailed, ScrapliConnectionNotOpened
+from scrapli.exceptions import (
+    ScrapliAuthenticationFailed,
+    ScrapliConnectionError,
+    ScrapliConnectionNotOpened,
+    ScrapliTimeout,
+)
 from scrapli_netconf import AsyncNetconfDriver
 from scrapli_netconf.constants import NetconfVersion
 
 from junos_exporter.config import Config, Credential, Probe, logger
+from junos_exporter.errors import DeviceError, ExporterError, RpcError
 
 NEW_LINE = 10
 CHUNK_MARKER = 35
 END_OF_MESSAGE = b"]]>]]>"
 
+SESSION_ERRORS = (ScrapliTimeout, ScrapliConnectionError, ScrapliConnectionNotOpened)
+
 
 def _localname(tag: str) -> str:
     return tag.rpartition(":")[2]
-
-
-class RpcError(Exception):
-    def __init__(self, err: str) -> None:
-        self.err = err
-
-    def __str__(self) -> str:
-        return f"{self.err}"
 
 
 def _deframe(raw: bytes, netconf_version: NetconfVersion) -> bytes:
@@ -71,6 +70,7 @@ class Connector:
         credential: Credential,
         ssh_config: str | None,
         timeout_socket: int,
+        timeout_transport: int,
     ) -> None:
         self.target = target
         self.backup_connections = backup_connections
@@ -95,6 +95,7 @@ class Connector:
             transport="asyncssh",
             transport_options=transport_options,
             timeout_socket=timeout_socket,
+            timeout_transport=timeout_transport,
         )
 
     async def open(self) -> "None":
@@ -109,9 +110,8 @@ class Connector:
             logger.error(
                 f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})"
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})",
+            raise DeviceError(
+                f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})"
             ) from None
         except (OSError, ScrapliAuthenticationFailed) as err:
             is_try_backup = True
@@ -125,9 +125,8 @@ class Connector:
                 logger.error(
                     f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})"
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})",
+                raise DeviceError(
+                    f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})"
                 ) from None
 
             self.conn = AsyncNetconfDriver(
@@ -139,6 +138,7 @@ class Connector:
                 transport="asyncssh",
                 transport_options=self.transport_options,
                 timeout_socket=self.conn.timeout_socket,
+                timeout_transport=self.conn.timeout_transport,
             )
             logger.info(
                 f"Try to fallback to the backup connection(Target: {self.target}, Connection: {self.conn.host})"
@@ -181,8 +181,11 @@ class Connector:
             raise RpcError(message.to_str() or "unknown rpc error")
         return element
 
-    async def get(self, name: str, probe: Probe) -> pygxml.Result | None:
+    async def get(self, name: str, probe: Probe) -> pygxml.Result:
         """Sends the probe's rpc and returns the reply element.
+
+        Raises RpcError when the device gave no usable answer to this rpc, and
+        DeviceError when the session itself died.
 
         The result borrows the response buffer, so it keeps that buffer alive
         for as long as the caller holds on to it.
@@ -201,11 +204,13 @@ class Connector:
         logger.debug(f"Start to get rpc reply(Target: {self.target}, Probe: {name})")
         try:
             reply = await self._get_rpc(rpc)
-        except RpcError as err:
+        except SESSION_ERRORS as err:
             logger.error(
-                f"Could not get rpc reply(Target: {self.target}, Probe: {name}, RpcError: {err})"
+                f"Lost netconf connection(Target: {self.target}, Probe: {name}, {err.__class__.__name__}: {err})"
             )
-            return None
+            raise DeviceError(
+                f"Lost netconf connection(Target: {self.target}, Probe: {name}, {err.__class__.__name__}: {err})"
+            ) from None
         logger.debug(
             f"Completed to get rpc reply(Target: {self.target}, Probe: {name})"
         )
@@ -217,6 +222,7 @@ class ConnecterBuilder:
         self.credentials: dict[str, Credential] = config.credentials
         self.ssh_config: str | None = config.ssh_config
         self.timeout_socket: int = config.timeout_socket
+        self.timeout: int = config.timeout
 
     def build(self, target_text: str, credential_name: str) -> Connector:
         targets = target_text.split(",")
@@ -231,9 +237,8 @@ class ConnecterBuilder:
             logger.error(
                 f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)"
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)",
+            raise ExporterError(
+                f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)"
             )
         return Connector(
             target=target,
@@ -241,4 +246,5 @@ class ConnecterBuilder:
             credential=self.credentials[credential_name],
             ssh_config=self.ssh_config,
             timeout_socket=self.timeout_socket,
+            timeout_transport=self.timeout,
         )

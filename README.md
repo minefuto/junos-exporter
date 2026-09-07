@@ -49,7 +49,7 @@ pip install junos-exporter
    general:
      prefix: junos          # Prefix prepended to all exported metric names
      timeout: 60            # Total timeout for Junos RPC execution and data collection
-     timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection
+     timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection (TCP connect and authentication)
      # ssh_config: ~/.ssh/config  # SSH config for the NETCONF connection, e.g. to reach devices via a jump host
 
    credentials:
@@ -157,6 +157,26 @@ scrape_configs:
 ```
 
 ## Metrics
+
+### Scrape status
+
+Every scrape exposes two status metrics next to the collected ones.
+
+```
+# HELP junos_up Target was reachable and the scrape completed
+# TYPE junos_up gauge
+junos_up{} 1
+
+# HELP junos_rpc_success RPC for the probe succeeded
+# TYPE junos_rpc_success gauge
+junos_rpc_success{probe="vrrp_status"} 1
+```
+
+They split the two kinds of failure apart, so an alert points at the right side:
+
+- `up == 0` -- the exporter is at fault: an undefined `module` or `credential`, a reply it cannot interpret, or a probe definition that fails to parse. The exporter answers with HTTP 500 and Prometheus records the scrape as failed
+- `junos_up == 0` -- the device is at fault: unreachable, or the connection died before the scrape finished. No `junos_rpc_success` is exposed in this case
+- `junos_rpc_success == 0` -- the device gave no usable answer to that one RPC: an `rpc-error`, which also happens when a platform does not support it, or a reply the exporter could not read back. The rest of the scrape is unaffected, and `/debug` reports the reason
 
 ### Selecting a module
 

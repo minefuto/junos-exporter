@@ -2,10 +2,9 @@ import re
 from datetime import datetime, timedelta
 from math import isfinite, isnan
 
-from fastapi import HTTPException, status
-
 from junos_exporter.config import Config, Label, Metric, Probe, logger
 from junos_exporter.connector import Connector
+from junos_exporter.errors import ExporterError, RpcError
 from junos_exporter.parser import Parser
 
 UnixtimeFormats = list[tuple[re.Pattern[str], tuple[str, ...] | None]]
@@ -144,14 +143,42 @@ class Exporter:
         self.collectors = collectors
         self.prefix = prefix
 
+    def _up(self, value: int) -> list[str]:
+        name = f"{self.prefix}_up"
+        return [
+            f"# HELP {name} Target was reachable and the scrape completed",
+            f"# TYPE {name} gauge",
+            f"{name}{{}} {value}\n",
+        ]
+
+    def _rpc_success(self, results: list[tuple[str, int]]) -> list[str]:
+        name = f"{self.prefix}_rpc_success"
+        exposition = [
+            f"# HELP {name} RPC for the probe succeeded",
+            f"# TYPE {name} gauge",
+        ]
+        exposition.extend(
+            f'{name}{{probe="{probe}"}} {value}' for probe, value in results
+        )
+        return exposition
+
+    def down(self) -> str:
+        """Renders the exposition for a scrape session that never completed."""
+        return "\n".join(self._up(0))
+
     async def collect(self, connector: Connector) -> str:
         exposition: list[str] = []
-        up_status: int = 1
+        rpc_results: list[tuple[str, int]] = []
         for collector in self.collectors:
-            reply = await connector.get(collector.name, collector.probe)
-            if reply is None:
-                up_status = 0
+            try:
+                reply = await connector.get(collector.name, collector.probe)
+            except RpcError as err:
+                logger.error(
+                    f"Could not get rpc reply(Target: {connector.target}, Probe: {collector.name}, RpcError: {err})"
+                )
+                rpc_results.append((collector.name, 0))
                 continue
+            rpc_results.append((collector.name, 1))
 
             logger.debug(
                 f"Start to parse rpc reply(Target: {connector.target}, Probe: {collector.name})"
@@ -171,9 +198,9 @@ class Exporter:
                 "\n".join([c.convert(records) for c in collector.converters])
             )
 
-        exposition.append(f"# HELP {self.prefix}_up All rpcs to target were successful")
-        exposition.append(f"# TYPE {self.prefix}_up gauge")
-        exposition.append(f"{self.prefix}_up{{}} {up_status}\n")
+        exposition.extend(self._rpc_success(rpc_results))
+        exposition.append("")
+        exposition.extend(self._up(1))
         return "\n".join(exposition)
 
 
@@ -227,8 +254,5 @@ class ExporterBuilder:
     def build(self, module_name: str) -> Exporter:
         if module_name not in self.collectors:
             logger.error(f"Module is not defined(Module: {module_name})")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Module is not defined(Module: {module_name})",
-            )
+            raise ExporterError(f"Module is not defined(Module: {module_name})")
         return Exporter(self.collectors[module_name], self.prefix)
