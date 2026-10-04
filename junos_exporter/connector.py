@@ -10,7 +10,7 @@ from scrapli.netconf import Netconf
 from scrapli.session import Options as SessionOptions
 from scrapli.transport import Ssh2Options
 
-from junos_exporter.config import Config, Credential, Probe, logger
+from junos_exporter.config import Config, Credential, Probe, Query, logger
 from junos_exporter.errors import DeviceError, ExporterError, RpcError
 
 NETCONF_PORT = 830
@@ -159,15 +159,7 @@ class Connector:
             raise RpcError(message.to_str() or "unknown rpc error")
         return element
 
-    async def get(self, name: str, probe: Probe) -> pygxml.Result:
-        """Sends the probe's rpc and returns the reply element.
-
-        Raises RpcError when the device gave no usable answer to this rpc, and
-        DeviceError when the session itself died.
-
-        The result borrows the response buffer, so it keeps that buffer alive
-        for as long as the caller holds on to it.
-        """
+    async def get(self, name: str, probe: Probe | Query) -> pygxml.Result:
         args = []
         for arg, value in probe.args.items():
             if value is False:
