@@ -381,6 +381,39 @@ Then `/debug` shows the records the current definition extracts from that reply.
 curl 'localhost:9326/debug?target=192.168.1.1&probe=vrrp_status'
 ```
 
+## Query
+
+`/query` runs the RPCs defined under `queries` in the config and returns the extracted fields as JSON. RPC arguments declared in the definition can be overridden per request with `args[<name>]=<value>`.
+
+```yaml
+queries:
+  physical_interface_status:
+    rpc: get-interface-information
+    args:
+      extensive: True
+      interface_name: null    # required in the request
+    item: physical-interface
+    fields:
+      - name: interface
+        path: name
+      - name: oper_status
+        path: oper-status
+```
+
+```sh
+curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_status&args[interface_name]=xe-0/0/0'
+```
+
+```json
+{
+  "target": "192.168.1.1",
+  "collected_at": "2026-10-05T12:34:56+09:00",
+  "queries": {
+    "physical_interface_status": [{"interface": "xe-0/0/0", "oper_status": "up"}]
+  }
+}
+```
+
 ## License
 
 MIT

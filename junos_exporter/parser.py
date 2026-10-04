@@ -2,7 +2,7 @@ from collections.abc import Iterator
 
 import pygxml
 
-from junos_exporter.config import PathSpec, Probe
+from junos_exporter.config import PathSpec, Probe, Query
 
 Pair = tuple[str, pygxml.Result]
 Record = tuple[pygxml.Result, list[Pair], list[Pair]]
@@ -27,7 +27,7 @@ class Field:
 
 
 class Parser:
-    def __init__(self, probe: Probe) -> None:
+    def __init__(self, probe: Probe | Query) -> None:
         self.container = [s for s in probe.container.split(".") if s]
         self.items = set(probe.item)
         self.recursive = probe.recursive

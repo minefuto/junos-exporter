@@ -2,6 +2,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from importlib.resources import files
 from logging import getLogger
 from typing import Literal
@@ -100,7 +101,7 @@ class PathSpec(BaseModel):
         return self.path[0]
 
 
-def dedup_specs(specs: list[PathSpec]) -> dict[str, PathSpec]:
+def dedup_specs(specs: Sequence[PathSpec]) -> dict[str, PathSpec]:
     deduped: dict[str, PathSpec] = {}
     for spec in specs:
         if not spec.path:
@@ -185,7 +186,39 @@ class Probe(BaseModel):
         return list(dedup_specs([*self.metrics, *self.labels]).values())
 
 
-SECTIONS = ("general", "credentials", "modules", "probes")
+class QueryField(Label):
+    help_: str = Field("", alias="help")
+
+
+class Query(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rpc: str
+    args: dict[str, str | bool | None] = Field(default_factory=dict)
+    container: str = ""
+    item: list[str]
+    recursive: bool = False
+    fields: list[QueryField] = Field(default_factory=list)
+
+    @field_validator("item", mode="before")
+    @classmethod
+    def to_list(cls, item: str | list[str]) -> list[str]:
+        return [item] if isinstance(item, str) else item
+
+    @model_validator(mode="after")
+    def check_fields(self) -> "Query":
+        names = [field.name for field in self.fields]
+        if duplicated := {name for name in names if names.count(name) > 1}:
+            raise ValueError(f"field({', '.join(sorted(duplicated))}) is duplicated")
+        dedup_specs(self.fields)
+        return self
+
+    @property
+    def specs(self) -> list[PathSpec]:
+        return list(dedup_specs(self.fields).values())
+
+
+SECTIONS = ("general", "credentials", "modules", "probes", "queries")
 
 OVERLAY_LOCATIONS = ("config.yml", "~/.junos-exporter/config.yml")
 
@@ -261,6 +294,12 @@ class Config:
                     self.probes[name] = Probe(**probe)
                 except ValidationError as e:
                     sys.exit(f"failed to load config file.\nprobe({name})\n{e}")
+            self.queries: dict[str, Query] = {}
+            for name, query in (config.get("queries") or {}).items():
+                try:
+                    self.queries[name] = Query(**query)
+                except ValidationError as e:
+                    sys.exit(f"failed to load config file.\nquery({name})\n{e}")
         except ValidationError as e:
             sys.exit(f"failed to load config file.\n{e}")
         except KeyError as e:
