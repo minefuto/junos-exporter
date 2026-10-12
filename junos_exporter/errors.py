@@ -17,9 +17,6 @@ class DeviceError(Exception):
 class RpcError(Exception):
     """Raised when the device gave no usable answer to a single rpc.
 
-    An rpc-error, a reply that cannot be deframed, or a missing or empty
-    rpc-reply. A device can send a malformed reply, and the channel is already
-    resynchronised at the message terminator by the time the reply is read, so
-    the session itself is healthy and only that probe's `<prefix>_rpc_success`
-    becomes 0.
+    An rpc-error, or a missing or empty rpc-reply. The session itself is
+    healthy and only that probe's `<prefix>_rpc_success` becomes 0.
     """

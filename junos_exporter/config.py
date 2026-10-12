@@ -27,17 +27,14 @@ class General(BaseModel):
     prefix: str = "junos"
     timeout: int = 60
     timeout_socket: int = 15
-    ssh_config: str | None = None
 
-    @field_validator("ssh_config", mode="after")
-    @classmethod
-    def check_exist_file(cls, path: str | None) -> str | None:
-        if path is None:
-            return None
-        abs_path = os.path.abspath(os.path.expanduser(path))
-        if not os.path.isfile(abs_path):
-            raise ValueError(f"file({abs_path}) does not exist")
-        return abs_path
+
+class ProxyJump(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    host: str
+    port: int = 22
+    credential: str
 
 
 class Credential(BaseModel):
@@ -47,6 +44,7 @@ class Credential(BaseModel):
     password: str = ""
     private_key: str = ""
     private_key_passphrase: str = ""
+    proxy_jump: ProxyJump | None = None
 
 
 class Module(BaseModel):
@@ -249,6 +247,18 @@ class Config:
                 name: Credential.model_validate(credential)
                 for name, credential in config["credentials"].items()
             }
+            for name, credential in self.credentials.items():
+                if credential.proxy_jump is None:
+                    continue
+                jump = self.credentials.get(credential.proxy_jump.credential)
+                if jump is None:
+                    sys.exit(
+                        f"failed to load config file.\ncredential({name})\nproxy_jump credential({credential.proxy_jump.credential}) is not defined in credentials"
+                    )
+                if jump.proxy_jump is not None:
+                    sys.exit(
+                        f"failed to load config file.\ncredential({name})\nproxy_jump credential({credential.proxy_jump.credential}) must not have proxy_jump"
+                    )
             self.modules = {
                 name: Module.model_validate(
                     module, context={"probes": config["probes"]}
@@ -277,7 +287,3 @@ class Config:
     @property
     def timeout_socket(self) -> int:
         return self.general.timeout_socket
-
-    @property
-    def ssh_config(self) -> str | None:
-        return self.general.ssh_config

@@ -9,12 +9,10 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "asyncssh>=2.20.0",
-    "bcrypt>=5.0.0",
     "fastapi>=0.115.8",
     "pygxml>=0.0.5",
     "pyyaml>=6.0.2",
-    "scrapli-netconf>=2025.1.30",
+    "scrapli2>=2.0.1",
     "uvicorn>=0.34.0",
 ]
 classifiers = [
