@@ -425,6 +425,28 @@ curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_stat
 }
 ```
 
+### Bundled queries
+
+The bundled `config.yml` defines the following queries. Filter arguments are optional unless noted; omitting them returns every entry. Override any of them in your own `config.yml` under the same name.
+
+| query | rpc | args |
+| --- | --- | --- |
+| `interface` | `get-interface-information` | `interface_name` |
+| `interface_optic` | `get-interface-optics-diagnostics-information` | `interface_name` |
+| `lldp_neighbor` | `get-lldp-neighbors-information` | `interface_device` |
+| `lacp` | `get-lacp-interface-information` | `interface_name` |
+| `arp` | `get-arp-table-information` | `hostname`, `interface` |
+| `route` | `get-route-information` | `destination` (required), `table` |
+| `bgp_neighbor` | `get-bgp-neighbor-information` | `neighbor_address`, `instance` |
+| `ospf_neighbor` | `get-ospf-neighbor-information` | `neighbor`, `instance` |
+| `bfd_session` | `get-bfd-session-information` | `address` |
+| `vrrp` | `get-vrrp-information` | `interface` |
+| `version` | `get-software-information` | |
+| `chassis_alarm` | `get-alarm-information` | |
+| `system_alarm` | `get-system-alarm-information` | |
+| `hardware` | `get-chassis-inventory` | |
+| `uptime` | `get-system-uptime-information` | |
+
 ## License
 
 MIT

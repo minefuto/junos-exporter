@@ -691,3 +691,297 @@ probes:
         regex: .*\.(\d+)
       - name: neighbor
         path: session-neighbor
+
+queries:
+  interface:
+    rpc: get-interface-information
+    args:
+      interface_name: ''
+    item: physical-interface
+    fields:
+      - name: name
+        path: name
+      - name: description
+        path: description
+      - name: admin_status
+        path: admin-status
+      - name: oper_status
+        path: oper-status
+      - name: speed
+        path: speed
+      - name: mtu
+        path: mtu
+      - name: interface_flapped
+        path: interface-flapped
+
+  interface_optic:
+    rpc: get-interface-optics-diagnostics-information
+    args:
+      interface_name: ''
+    item: physical-interface
+    fields:
+      - name: name
+        path: name
+      - name: laser_output_power_dbm
+        path: optics-diagnostics.laser-output-power-dbm
+      - name: rx_signal_avg_optical_power_dbm
+        path: optics-diagnostics.rx-signal-avg-optical-power-dbm
+      - name: laser_bias_current
+        path: optics-diagnostics.laser-bias-current
+      - name: module_temperature
+        path: optics-diagnostics.module-temperature
+      - name: module_voltage
+        path: optics-diagnostics.module-voltage
+
+  lldp_neighbor:
+    rpc: get-lldp-neighbors-information
+    args:
+      interface_device: ''
+    item: lldp-neighbor-information
+    fields:
+      - name: lldp_local_port_id
+        path:
+          - lldp-local-port-id
+          - lldp-local-interface
+      - name: lldp_local_parent_interface_name
+        path: lldp-local-parent-interface-name
+      - name: lldp_remote_chassis_id
+        path: lldp-remote-chassis-id
+      - name: lldp_remote_port_id
+        path: lldp-remote-port-id
+      - name: lldp_remote_system_name
+        path: lldp-remote-system-name
+
+  lacp:
+    rpc: get-lacp-interface-information
+    args:
+      interface_name: ''
+    container: lacp-interface-information
+    item: lag-lacp-protocol
+    fields:
+      - name: aggregate_name
+        path: lag-lacp-header.aggregate-name
+      - name: name
+        path: name
+      - name: lacp_receive_state
+        path: lacp-receive-state
+      - name: lacp_transmit_state
+        path: lacp-transmit-state
+      - name: lacp_mux_state
+        path: lacp-mux-state
+
+  arp:
+    rpc: get-arp-table-information
+    args:
+      no_resolve: True
+      hostname: ''
+      interface: ''
+    item: arp-table-entry
+    fields:
+      - name: ip_address
+        path: ip-address
+      - name: mac_address
+        path: mac-address
+      - name: interface_name
+        path: interface-name
+
+  route:
+    rpc: get-route-information
+    args:
+      destination: null
+      table: ''
+    container: route-table
+    item: rt-entry
+    recursive: True
+    fields:
+      - name: table_name
+        path: table-name
+      - name: rt_destination
+        path: rt-destination
+      - name: active_tag
+        path: active-tag
+      - name: protocol_name
+        path: protocol-name
+      - name: preference
+        path: preference
+      - name: age
+        path: age
+      - name: to
+        path: nh.to
+      - name: via
+        path: nh.via
+
+  bgp_neighbor:
+    rpc: get-bgp-neighbor-information
+    args:
+      neighbor_address: ''
+      instance: ''
+    item: bgp-peer
+    fields:
+      - name: peer_address
+        path: peer-address
+      - name: peer_as
+        path: peer-as
+      - name: local_address
+        path: local-address
+      - name: peer_type
+        path: peer-type
+      - name: peer_state
+        path: peer-state
+      - name: description
+        path: description
+      - name: peer_id
+        path: peer-id
+      - name: last_error
+        path: last-error
+      - name: flap_count
+        path: flap-count
+
+  ospf_neighbor:
+    rpc: get-ospf-neighbor-information
+    args:
+      neighbor: ''
+      instance: ''
+    item: ospf-neighbor
+    fields:
+      - name: neighbor_address
+        path: neighbor-address
+      - name: interface_name
+        path: interface-name
+      - name: ospf_neighbor_state
+        path: ospf-neighbor-state
+      - name: neighbor_id
+        path: neighbor-id
+      - name: neighbor_priority
+        path: neighbor-priority
+      - name: activity_timer
+        path: activity-timer
+
+  bfd_session:
+    rpc: get-bfd-session-information
+    args:
+      address: ''
+    item: bfd-session
+    fields:
+      - name: session_neighbor
+        path: session-neighbor
+      - name: session_state
+        path: session-state
+      - name: session_interface
+        path: session-interface
+      - name: session_detection_time
+        path: session-detection-time
+      - name: session_transmission_interval
+        path: session-transmission-interval
+      - name: session_adaptive_multiplier
+        path: session-adaptive-multiplier
+
+  vrrp:
+    rpc: get-vrrp-information
+    args:
+      detail: True
+      interface: ''
+    container: vrrp-interface
+    item: vrrp-vlan
+    fields:
+      - name: physical_interface
+        path: physical-interface
+      - name: unit
+        path: unit
+      - name: group
+        path: group
+      - name: interface_state
+        path: interface-state
+      - name: vrrp_state
+        path: vrrp-state
+      - name: vrrp_mode
+        path:
+          - vrrp-mode
+          - active-inherit.vrrp-mode
+      - name: local_interface_address
+        path: local-interface-address
+      - name: virtual_ip_address
+        path: virtual-ip-address
+
+  version:
+    rpc: get-software-information
+    item: package-information
+    recursive: True
+    fields:
+      - name: re_name
+        path: re-name
+      - name: host_name
+        path: host-name
+      - name: product_model
+        path: product-model
+      - name: junos_version
+        path: junos-version
+      - name: name
+        path: name
+      - name: comment
+        path: comment
+
+  chassis_alarm:
+    rpc: get-alarm-information
+    item: alarm-detail
+    fields:
+      - name: alarm_time
+        path: alarm-time
+      - name: alarm_class
+        path: alarm-class
+      - name: alarm_type
+        path: alarm-type
+      - name: alarm_description
+        path: alarm-description
+
+  system_alarm:
+    rpc: get-system-alarm-information
+    item: alarm-detail
+    fields:
+      - name: alarm_time
+        path: alarm-time
+      - name: alarm_class
+        path: alarm-class
+      - name: alarm_type
+        path: alarm-type
+      - name: alarm_description
+        path: alarm-description
+
+  hardware:
+    rpc: get-chassis-inventory
+    item:
+      - chassis
+      - chassis-module
+      - chassis-sub-module
+      - chassis-sub-sub-module
+      - chassis-sub-sub-sub-module
+    recursive: True
+    fields:
+      - name: name
+        path: name
+      - name: version
+        path: version
+      - name: part_number
+        path: part-number
+      - name: serial_number
+        path: serial-number
+      - name: description
+        path: description
+
+  uptime:
+    rpc: get-system-uptime-information
+    item: system-booted-time
+    recursive: True
+    fields:
+      - name: re_name
+        path: re-name
+      - name: current_time
+        path: current-time.date-time
+      - name: system_booted_time
+        path: date-time
+      - name: protocols_started_time
+        path: protocols-started-time.date-time
+      - name: last_configured_time
+        path: last-configured-time.date-time
+      - name: up_time
+        path: uptime-information.up-time
