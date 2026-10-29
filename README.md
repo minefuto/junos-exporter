@@ -50,7 +50,6 @@ pip install junos-exporter
      prefix: junos          # Prefix prepended to all exported metric names
      timeout: 60            # Total timeout for Junos RPC execution and data collection
      timeout_socket: 15     # Timeout for establishing the initial NETCONF SSH connection (TCP connect and authentication)
-     # ssh_config: ~/.ssh/config  # SSH config for the NETCONF connection, e.g. to reach devices via a jump host
 
    credentials:
      default:
@@ -132,6 +131,18 @@ credentials:
     username: admin
     private_key: ~/.ssh/id_rsa
     private_key_passphrase: admin@123 # option
+
+  via_bastion: # through a jump host
+    username: admin
+    password: admin@123
+    proxy_jump:
+      host: bastion.example.com
+      port: 22            # option
+      credential: bastion # credential used to log in to the jump host
+
+  bastion:
+    username: jump
+    private_key: ~/.ssh/id_rsa
 ```
 
 In your Prometheus configuration, setting `__params_credential` to `vjunos` ensures the corresponding credentials are used.

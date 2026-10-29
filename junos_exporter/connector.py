@@ -1,65 +1,33 @@
-import socket
+import os
+from logging import NullHandler, getLogger
 from types import TracebackType
 from xml.sax.saxutils import escape
 
 import pygxml
-from asyncssh.pbe import KeyEncryptionError
-from asyncssh.public_key import KeyImportError
-from scrapli.exceptions import (
-    ScrapliAuthenticationFailed,
-    ScrapliConnectionError,
-    ScrapliConnectionNotOpened,
-    ScrapliTimeout,
-)
-from scrapli_netconf import AsyncNetconfDriver
-from scrapli_netconf.constants import NetconfVersion
+from scrapli.auth import Options as AuthOptions
+from scrapli.exceptions import ScrapliException
+from scrapli.netconf import Netconf
+from scrapli.session import Options as SessionOptions
+from scrapli.transport import Ssh2Options
 
 from junos_exporter.config import Config, Credential, Probe, logger
 from junos_exporter.errors import DeviceError, ExporterError, RpcError
 
-NEW_LINE = 10
-CHUNK_MARKER = 35
-END_OF_MESSAGE = b"]]>]]>"
+NETCONF_PORT = 830
 
-SESSION_ERRORS = (ScrapliTimeout, ScrapliConnectionError, ScrapliConnectionNotOpened)
+# libscrapli repeats every failure on its own logger, which would otherwise
+# reach stderr unformatted through logging.lastResort
+getLogger("scrapli").addHandler(NullHandler())
 
 
 def _localname(tag: str) -> str:
     return tag.rpartition(":")[2]
 
 
-def _deframe(raw: bytes, netconf_version: NetconfVersion) -> bytes:
-    if netconf_version == NetconfVersion.VERSION_1_0:
-        return raw.replace(END_OF_MESSAGE, b"")
-
-    data = raw.strip()
-    end = len(data)
-    chunks = []
-    cursor = 0
-    while cursor < end:
-        if data[cursor] == NEW_LINE:
-            cursor += 1
-            continue
-        if data[cursor] != CHUNK_MARKER:
-            raise RpcError("chunk marker is not found")
-        cursor += 1
-        if cursor >= end or data[cursor] == CHUNK_MARKER:
-            break
-
-        marker = data.find(b"\n", cursor, cursor + 11)
-        if marker == -1:
-            raise RpcError("chunk size is not found")
-        try:
-            size = int(data[cursor:marker])
-        except ValueError:
-            raise RpcError("chunk size is not a number") from None
-        if size <= 0:
-            raise RpcError("chunk size is not positive")
-
-        cursor = marker + 1
-        chunks.append(data[cursor : cursor + size])
-        cursor += size
-    return b"".join(chunks)
+def _private_key(credential: Credential) -> str | None:
+    if not credential.private_key:
+        return None
+    return os.path.expanduser(credential.private_key)
 
 
 class Connector:
@@ -68,90 +36,91 @@ class Connector:
         target: str,
         backup_connections: list[str],
         credential: Credential,
-        ssh_config: str | None,
+        jump_credential: Credential | None,
         timeout_socket: int,
-        timeout_transport: int,
+        timeout: int,
     ) -> None:
         self.target = target
         self.backup_connections = backup_connections
+        self.credential = credential
+        self.jump_credential = jump_credential
+        self.timeout_socket = timeout_socket
+        self.timeout_ns = timeout * 1_000_000_000
+        self.host = target
+        self.conn = self._build(target)
 
-        transport_options: dict = {"asyncssh": {}}
-        if credential.private_key:
-            transport_options["asyncssh"]["client_keys"] = credential.private_key
-
-        if credential.private_key_passphrase:
-            transport_options["asyncssh"]["passphrase"] = (
-                credential.private_key_passphrase
+    def _build(self, host: str) -> Netconf:
+        # open_async() cannot take a per-call timeout before the session
+        # exists, so the session default bounds the open and each rpc passes
+        # its own
+        session_options = SessionOptions(operation_timeout_s=self.timeout_socket)
+        jump = self.credential.proxy_jump
+        if jump is None or self.jump_credential is None:
+            return Netconf(
+                host,
+                port=NETCONF_PORT,
+                auth_options=AuthOptions(
+                    username=self.credential.username,
+                    password=self.credential.password or None,
+                    private_key_path=_private_key(self.credential),
+                    private_key_passphrase=self.credential.private_key_passphrase
+                    or None,
+                ),
+                session_options=session_options,
+                transport_options=Ssh2Options(),
             )
 
-        self.transport_options = transport_options
-
-        self.conn: AsyncNetconfDriver = AsyncNetconfDriver(
-            host=self.target,
-            auth_username=credential.username,
-            auth_password=credential.password,
-            auth_strict_key=False,
-            ssh_config_file=True if ssh_config is None else ssh_config,
-            transport="asyncssh",
-            transport_options=transport_options,
-            timeout_socket=timeout_socket,
-            timeout_transport=timeout_transport,
+        # ssh2 takes the jump host as the primary session and the device as
+        # the proxy jump target
+        return Netconf(
+            jump.host,
+            port=jump.port,
+            auth_options=AuthOptions(
+                username=self.jump_credential.username,
+                password=self.jump_credential.password or None,
+                private_key_path=_private_key(self.jump_credential),
+                private_key_passphrase=self.jump_credential.private_key_passphrase
+                or None,
+            ),
+            session_options=session_options,
+            transport_options=Ssh2Options(
+                proxy_jump_host=host,
+                proxy_jump_port=NETCONF_PORT,
+                proxy_jump_username=self.credential.username,
+                proxy_jump_password=self.credential.password or None,
+                proxy_jump_private_key_path=_private_key(self.credential),
+                proxy_jump_private_key_passphrase=self.credential.private_key_passphrase
+                or None,
+            ),
         )
 
     async def open(self) -> "None":
-        try:
-            await self.conn.open()
-        except (
-            ScrapliConnectionNotOpened,
-            KeyImportError,
-            KeyEncryptionError,
-            socket.gaierror,
-        ) as err:
-            logger.error(
-                f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})"
-            )
-            raise DeviceError(
-                f"Could not open netconf connection(Target: {self.target}, {err.__class__.__name__}: {err})"
-            ) from None
-        except (OSError, ScrapliAuthenticationFailed) as err:
-            is_try_backup = True
-            if not self.backup_connections or (
-                isinstance(err, ScrapliAuthenticationFailed)
-                and str(err) != "timed out opening connection to device"
-            ):
-                is_try_backup = False
-
-            if not is_try_backup:
+        while True:
+            try:
+                await self.conn.open_async()
+                return
+            except ScrapliException as err:
                 logger.error(
-                    f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})"
+                    f"Could not open netconf connection(Target: {self.host}, {err.__class__.__name__}: {err})"
                 )
-                raise DeviceError(
-                    f"Could not open netconf connection(Target: {self.conn.host}, {err.__class__.__name__}: {err})"
-                ) from None
+                if not self.backup_connections:
+                    raise DeviceError(
+                        f"Could not open netconf connection(Target: {self.host}, {err.__class__.__name__}: {err})"
+                    ) from None
 
-            self.conn = AsyncNetconfDriver(
-                host=self.backup_connections.pop(0),
-                auth_username=self.conn.auth_username,
-                auth_password=self.conn.auth_password,
-                auth_strict_key=self.conn.auth_strict_key,
-                ssh_config_file=self.conn.ssh_config_file,
-                transport="asyncssh",
-                transport_options=self.transport_options,
-                timeout_socket=self.conn.timeout_socket,
-                timeout_transport=self.conn.timeout_transport,
-            )
+            self.host = self.backup_connections.pop(0)
+            self.conn = self._build(self.host)
             logger.info(
-                f"Try to fallback to the backup connection(Target: {self.target}, Connection: {self.conn.host})"
+                f"Try to fallback to the backup connection(Target: {self.target}, Connection: {self.host})"
             )
-            await self.open()
 
     async def __aenter__(self) -> "Connector":
         logger.debug(
-            f"Start to open netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+            f"Start to open netconf connection(Target: {self.target}, Connection: {self.host})"
         )
         await self.open()
         logger.debug(
-            f"Completed to open netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+            f"Completed to open netconf connection(Target: {self.target}, Connection: {self.host})"
         )
         return self
 
@@ -161,15 +130,24 @@ class Connector:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        await self.conn.close()
+        # a session that already failed cannot answer close-session
+        for force in (True,) if exc_type else (False, True):
+            try:
+                await self.conn.close_async(force=force)
+                break
+            except ScrapliException as err:
+                logger.debug(
+                    f"Could not close netconf connection(Target: {self.target}, Connection: {self.host}, {err.__class__.__name__}: {err})"
+                )
         logger.debug(
-            f"Closed netconf connection(Target: {self.target}, Connection: {self.conn.host})"
+            f"Closed netconf connection(Target: {self.target}, Connection: {self.host})"
         )
 
     async def _get_rpc(self, filter_: str) -> pygxml.Result:
-        request = self.conn._pre_rpc(filter_)
-        raw = await self.conn.channel.send_input_netconf(request.channel_input)
-        reply = pygxml.parse(_deframe(raw, self.conn.netconf_version)).get("rpc-reply")
+        result = await self.conn.raw_rpc_async(
+            filter_, operation_timeout_ns=self.timeout_ns
+        )
+        reply = pygxml.parse(result.result).get("rpc-reply")
         if not reply.exists():
             raise RpcError("rpc-reply is not found")
         if reply.type_ is not dict:
@@ -204,7 +182,7 @@ class Connector:
         logger.debug(f"Start to get rpc reply(Target: {self.target}, Probe: {name})")
         try:
             reply = await self._get_rpc(rpc)
-        except SESSION_ERRORS as err:
+        except ScrapliException as err:
             logger.error(
                 f"Lost netconf connection(Target: {self.target}, Probe: {name}, {err.__class__.__name__}: {err})"
             )
@@ -220,7 +198,6 @@ class Connector:
 class ConnecterBuilder:
     def __init__(self, config: Config) -> None:
         self.credentials: dict[str, Credential] = config.credentials
-        self.ssh_config: str | None = config.ssh_config
         self.timeout_socket: int = config.timeout_socket
         self.timeout: int = config.timeout
 
@@ -240,11 +217,14 @@ class ConnecterBuilder:
             raise ExporterError(
                 f"Could not build Connector(Target: {target}, Credential: {credential_name}, Error: credential is not defined)"
             )
+        credential = self.credentials[credential_name]
         return Connector(
             target=target,
             backup_connections=backup_connections,
-            credential=self.credentials[credential_name],
-            ssh_config=self.ssh_config,
+            credential=credential,
+            jump_credential=self.credentials[credential.proxy_jump.credential]
+            if credential.proxy_jump
+            else None,
             timeout_socket=self.timeout_socket,
-            timeout_transport=self.timeout,
+            timeout=self.timeout,
         )
