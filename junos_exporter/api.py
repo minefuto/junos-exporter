@@ -128,7 +128,26 @@ def to_fields(record: dict[str, str], fields: list[QueryField]) -> dict[str, str
     return result
 
 
-@app.get("/query", tags=["query"])
+@app.get(
+    "/query",
+    tags=["query"],
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "args",
+                "in": "query",
+                "required": False,
+                "style": "deepObject",
+                "explode": True,
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+                "description": 'Query args. e.g. {"interface_name": "ge-0/0/0"} is sent as args[interface_name]=ge-0/0/0. Booleans are "true" or "false".',
+            }
+        ]
+    },
+)
 async def query(
     request: Request, target: str, queries: str, credential: str = "default"
 ) -> JSONResponse:
