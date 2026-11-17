@@ -80,7 +80,7 @@ class PathSpec(BaseModel):
     def check_pygxml_path(cls, path: list[str]) -> list[str]:
         for p in path:
             try:
-                pygxml.compile(p)
+                pygxml.compile(p.removeprefix("^"))
             except ValueError as e:
                 reason = str(e).splitlines()[0]
                 raise ValueError(

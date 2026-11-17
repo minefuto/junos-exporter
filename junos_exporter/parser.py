@@ -9,9 +9,11 @@ Record = tuple[pygxml.Result, list[Pair], list[Pair]]
 
 
 class Candidate:
-    __slots__ = ("compiled", "head", "tail")
+    __slots__ = ("compiled", "head", "tail", "inherited_only")
 
     def __init__(self, path: str) -> None:
+        self.inherited_only = path.startswith("^")
+        path = path.removeprefix("^")
         self.compiled = pygxml.compile(path)
         self.head, _, self.tail = path.partition(".")
 
@@ -103,7 +105,9 @@ class Parser:
     ) -> str | None:
         for offset, candidate in enumerate(field.candidates):
             found: pygxml.Result | None = founds[field.start + offset]
-            if not found.exists():
+            if candidate.inherited_only:
+                found = self._lookup(candidate, [], inherited)
+            elif not found.exists():
                 found = self._lookup(candidate, siblings, inherited)
             if field.exists:
                 return "true" if found is not None else "false"
