@@ -96,17 +96,16 @@ async def debug(
     return Response(content=content, media_type="application/json")
 
 
-def resolve_args(
-    defined: dict[str, str | bool | None], given: dict[str, str]
-) -> dict[str, str | bool]:
+def resolve_args(query: Query, given: dict[str, str]) -> dict[str, str | bool]:
     args: dict[str, str | bool] = {}
-    for key, default in defined.items():
-        value = given.get(key, default)
+    for name, key in query.arg_names.items():
+        default = query.args[key]
+        value = given.get(name, default)
         if value is None:
-            raise ValueError(f"args({key}) is required")
+            raise ValueError(f"args({name}) is required")
         if isinstance(default, bool) and isinstance(value, str):
             if value not in ("true", "false"):
-                raise ValueError(f"args({key}) must be true or false")
+                raise ValueError(f"args({name}) must be true or false")
             value = value == "true"
         if value != "":
             args[key] = value
@@ -165,7 +164,7 @@ async def query(
     errors: dict[str, str] = {}
     if not names:
         errors["_request"] = "queries is empty"
-    known = {k for n in names if n in defined for k in defined[n][0].args}
+    known = {k for n in names if n in defined for k in defined[n][0].arg_names}
     if unknown := sorted(given.keys() - known):
         errors["_request"] = f"args({', '.join(unknown)}) is not defined in the queries"
     resolved = {}
@@ -174,7 +173,7 @@ async def query(
             errors[name] = "query is not defined"
             continue
         try:
-            resolved[name] = resolve_args(defined[name][0].args, given)
+            resolved[name] = resolve_args(defined[name][0], given)
         except ValueError as e:
             errors[name] = str(e)
     if errors:

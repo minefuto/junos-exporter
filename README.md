@@ -394,7 +394,7 @@ curl 'localhost:9326/debug?target=192.168.1.1&probe=vrrp_status'
 
 ## Query
 
-`/query` runs the RPCs defined under `queries` in the config and returns the extracted fields as JSON. RPC arguments declared in the definition can be overridden per request with `args[<name>]=<value>`.
+`/query` runs the RPCs defined under `queries` in the config and returns the extracted fields as JSON. RPC arguments declared in the definition can be overridden per request with `args[<name>]=<value>`. `params` renames an argument for requests (`{request name: args key}`); a renamed argument is accepted only by its new name.
 
 ```yaml
 queries:
@@ -403,6 +403,8 @@ queries:
     args:
       extensive: True
       interface_name: null    # required in the request
+    params:
+      ifname: interface_name
     item: physical-interface
     fields:
       - name: interface
@@ -412,7 +414,7 @@ queries:
 ```
 
 ```sh
-curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_status&args[interface_name]=xe-0/0/0'
+curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_status&args[ifname]=xe-0/0/0'
 ```
 
 ```json

@@ -193,6 +193,7 @@ class Query(BaseModel):
 
     rpc: str
     args: dict[str, str | bool | None] = Field(default_factory=dict)
+    params: dict[str, str] = Field(default_factory=dict)
     container: str = ""
     item: list[str]
     recursive: bool = False
@@ -210,6 +211,22 @@ class Query(BaseModel):
             raise ValueError(f"field({', '.join(sorted(duplicated))}) is duplicated")
         dedup_specs(self.fields)
         return self
+
+    @model_validator(mode="after")
+    def check_params(self) -> "Query":
+        targets = list(self.params.values())
+        if missing := sorted(set(targets) - self.args.keys()):
+            raise ValueError(f"params target({', '.join(missing)}) is not in args")
+        if duplicated := sorted({t for t in targets if targets.count(t) > 1}):
+            raise ValueError(f"params target({', '.join(duplicated)}) is duplicated")
+        if clashed := sorted(self.params.keys() & (self.args.keys() - set(targets))):
+            raise ValueError(f"params({', '.join(clashed)}) clashes with args")
+        return self
+
+    @property
+    def arg_names(self) -> dict[str, str]:
+        renamed = {key: name for name, key in self.params.items()}
+        return {renamed.get(key, key): key for key in self.args}
 
     @property
     def specs(self) -> list[PathSpec]:
