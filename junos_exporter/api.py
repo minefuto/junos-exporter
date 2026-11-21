@@ -123,6 +123,10 @@ def to_fields(record: dict[str, str], fields: list[QueryField]) -> dict[str, str
             if match is None:
                 continue
             value = match.group(1) if field.regex.groups else match.group()
+        if field.value_transform is not None:
+            value = field.value_transform.get(
+                value, field.value_transform.get("_", value)
+            )
         result[field.name] = value
     return result
 

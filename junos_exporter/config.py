@@ -184,8 +184,20 @@ class Probe(BaseModel):
         return list(dedup_specs([*self.metrics, *self.labels]).values())
 
 
+def to_yaml_str(value: object) -> str:
+    return str(value).lower() if isinstance(value, bool) else str(value)
+
+
 class QueryField(Label):
     help_: str = Field("", alias="help")
+    value_transform: dict[str, str] | None = None
+
+    @field_validator("value_transform", mode="before")
+    @classmethod
+    def to_str_dict(cls, value_transform: dict) -> dict[str, str]:
+        if not isinstance(value_transform, dict):
+            raise ValueError(f"value_transform({value_transform}) is not a dict")
+        return {to_yaml_str(k): to_yaml_str(v) for k, v in value_transform.items()}
 
 
 class Query(BaseModel):
