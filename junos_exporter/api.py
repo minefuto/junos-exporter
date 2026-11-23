@@ -115,6 +115,7 @@ def resolve_args(query: Query, given: dict[str, str]) -> dict[str, str | bool]:
 def to_fields(record: dict[str, str], fields: list[QueryField]) -> dict[str, str]:
     result = {}
     for field in fields:
+        result[field.name] = ""
         if field.key not in record:
             continue
         value = record[field.key]
@@ -204,7 +205,7 @@ async def query(
                 continue
             if not errors:
                 records = (to_fields(r, query.fields) for r in parser.parse(reply))
-                results[name] = [r for r in records if r]
+                results[name] = [r for r in records if any(r.values())]
         return results
 
     collected_at = datetime.now().astimezone().isoformat(timespec="seconds")
