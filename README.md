@@ -28,7 +28,7 @@ pip install junos-exporter
 
 1. Write your `config.yml`
 
-   The exporter always loads the [bundled `config.yml`](junos_exporter/config.yml) first, which already defines 20 probes and the `default` module. Your own `config.yml` is layered on top of it, so it only needs to carry what you want to change -- usually just the credentials.
+   The exporter always loads the [bundled `config.yml`](junos_exporter/config.yml) first, which already defines 26 probes and the `default` module. Your own `config.yml` is layered on top of it, so it only needs to carry what you want to change -- usually just the credentials.
 
    ```sh
    mkdir -p ~/.junos-exporter && cat > ~/.junos-exporter/config.yml <<'EOF'
@@ -200,7 +200,7 @@ If the `module` parameter is omitted, the `default` profile will be used.
 
 ### Bundled probes
 
-The bundled [`config.yml`](junos_exporter/config.yml) defines 20 probes covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP and BFD -- all of them in the `default` module. They are always loaded, so your own `config.yml` only needs to list the ones you want to change.
+The bundled [`config.yml`](junos_exporter/config.yml) defines 25 probes covering alarms, chassis, interfaces, LLDP/LACP, routing, ARP, OSPF, BGP, VRRP, BFD, LDP, RSVP and MPLS LSPs -- all of them in the `default` module. They are always loaded, so your own `config.yml` only needs to list the ones you want to change.
 
 | probe | rpc | command |
 | --- | --- | --- |
@@ -209,6 +209,7 @@ The bundled [`config.yml`](junos_exporter/config.yml) defines 20 probes covering
 | `fpc_status` | `get-fpc-information` | `show chassis fpc` |
 | `hardware_status` | `get-chassis-inventory` | `show chassis hardware` |
 | `environment_status` | `get-environment-information` | `show chassis environment` |
+| `control_board_status` | `get-environment-cb-information` | `show chassis environment cb` |
 | `routing_engine_status` | `get-route-engine-information` | `show chassis routing-engine` |
 | `storage_status` | `get-system-storage` | `show system storage` |
 | `physical_interface_status` | `get-interface-information` | `show interfaces extensive` |
@@ -216,14 +217,19 @@ The bundled [`config.yml`](junos_exporter/config.yml) defines 20 probes covering
 | `interface_optic_status` | `get-interface-optics-diagnostics-information` | `show interfaces diagnostics optics` |
 | `lldp_status` | `get-lldp-neighbors-information` | `show lldp neighbors` |
 | `lacp_status` | `get-lacp-interface-information` | `show lacp interfaces` |
-| `route_status` | `get-route-summary-information` | `show route summary` |
+| `route_summary_status` | `get-route-summary-information` | `show route summary` |
 | `arp_status` | `get-arp-table-information` | `show arp expiration-time` |
 | `ospf_interface_status` | `get-ospf-interface-information` | `show ospf interface detail` |
 | `ospf_neighbor_status` | `get-ospf-neighbor-information` | `show ospf neighbor extensive` |
 | `bgp_status` | `get-bgp-summary-information` | `show bgp summary` |
 | `bgp_route_status` | `get-bgp-summary-information` | `show bgp summary` |
-| `vrrp_status` | `get-vrrp-information` | `show vrrp detail` |
+| `vrrp_status` | `get-vrrp-information` | `show vrrp extensive` |
 | `bfd_status` | `get-bfd-session-information` | `show bfd session` |
+| `ldp_neighbor_status` | `get-ldp-neighbor-information` | `show ldp neighbor detail` |
+| `rsvp_interface_status` | `get-rsvp-interface-information` | `show rsvp interface` |
+| `rsvp_neighbor_status` | `get-rsvp-neighbor-information` | `show rsvp neighbor detail` |
+| `mpls_lsp_status` | `get-mpls-lsp-information` | `show mpls lsp ingress detail` |
+| `mpls_lsp_path_status` | `get-mpls-lsp-information` | `show mpls lsp ingress detail` |
 
 
 ### Defining a probe
@@ -236,7 +242,7 @@ Records are cut out of the reply like this:
 - Every `path` written in `metrics` and `labels` is looked up in three places and the **first hit wins**: **(a)** inside the `item` element, **(b)** among the siblings that follow it, up to the next `item`, **(c)** among the ancestor's children that appeared before that `item` -- which is how a parent's values are inherited by its records.
 - A path that resolves nowhere is simply left out of the record, and the metric or label using it is not exposed for that record.
 
-For example, `show vrrp detail` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead: 
+For example, `show vrrp extensive` returns each VR as a `vrrp-vlan` element followed by loose siblings, and the second VR reports its mode under `active-inherit` instead: 
 
 ```xml
 <vrrp-information>
@@ -269,13 +275,15 @@ The bundled `vrrp_status` probe reads it as follows. `physical-interface` and `u
 probes:
   vrrp_status:
     rpc: get-vrrp-information
+    args:
+      extensive: True
     container: vrrp-interface
     item: vrrp-vlan
     metrics:
       - name: vrrp_state
         path: vrrp-state
         type: gauge
-        help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
+        help: "VR State of show vrrp extensive(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
           "master": 5
           "backup": 4
@@ -299,7 +307,7 @@ probes:
 Which is exposed as:
 
 ```
-# HELP junos_vrrp_state VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)
+# HELP junos_vrrp_state VR State of show vrrp extensive(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)
 # TYPE junos_vrrp_state gauge
 junos_vrrp_state{interface="xe-0/0/0",unit="1",mode="active",group="10"} 5.0
 junos_vrrp_state{interface="xe-0/0/0",unit="2",mode="inherit",group="20"} 5.0
@@ -335,7 +343,11 @@ Both `metrics` and `labels` read their value through a `path` relative to the re
       - name: iff_up
         path: if-config-flags.iff-up            # presence instead of value
         exists: True
+      - name: lsp
+        path: ^name                             # inherited from ancestors only
 ```
+
+A path prefixed with `^` skips (a) and (b) and is looked up only in (c). Use it when the `item` element has a child of the same name as the parent's, e.g. `mpls-lsp-path` carrying its own `name` under `mpls-lsp`.
 
 A path with `exists: True` yields the string `"true"` or `"false"` rather than the element value, so it always resolves. It cannot be combined with a list of paths.
 
@@ -380,10 +392,10 @@ Get the RPC reply from the device itself to work out what to write.
 
 ```
 # The RPC name to put in `rpc:`
-show vrrp detail | display xml rpc
+show vrrp extensive | display xml rpc
 
 # The reply XML, to work out container / item / path
-show vrrp detail | display xml
+show vrrp extensive | display xml
 ```
 
 Then `/debug` shows the records the current definition extracts from that reply.
@@ -404,7 +416,7 @@ queries:
       extensive: True
       interface_name: null    # required in the request
     params:
-      ifname: interface_name
+      interface: interface_name
     item: physical-interface
     fields:
       - name: interface
@@ -414,7 +426,7 @@ queries:
 ```
 
 ```sh
-curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_status&args[ifname]=xe-0/0/0'
+curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_status&args[interface]=xe-0/0/0'
 ```
 
 ```json
@@ -425,6 +437,32 @@ curl -g 'localhost:9326/query?target=192.168.1.1&queries=physical_interface_stat
     "physical_interface_status": [{"interface": "xe-0/0/0", "oper_status": "up"}]
   }
 }
+```
+
+### Bundled queries
+
+The bundled [`config.yml`](junos_exporter/config.yml) defines one query per bundled probe, with the same name, plus `route_status`, `bgp_advertised_route_status` and `bgp_received_route_status` (one record per route path), returning values as raw strings (e.g. `"Established"` instead of `5`). Field names follow the same naming rules as probe labels: the same value has the same name in every query and probe (`interface`, `unit`, `address`, `instance`, `state`, ...), and an arg has the same name as the field it filters, so a returned value can be passed straight to another query's `args`. `bgp_status` and `bgp_route_status` are read from `show bgp neighbor`, so they cover peers in every routing instance.
+
+| query | args |
+| --- | --- |
+| `fpc_status`, `control_board_status`, `routing_engine_status` | `slot` |
+| `physical_interface_status`, `logical_interface_status` | `interface` (default `[afgxe][et]-*`) |
+| `interface_optics_status` | `interface` (default `[efgx][et]-*`) |
+| `lacp_status`, `arp_status` | `interface` |
+| `route_summary_status` | `table` |
+| `route_status` (`show route extensive`) | `destination`, `table`, `protocol` |
+| `bgp_advertised_route_status`, `bgp_received_route_status` | `address` (required), `table`, `destination` |
+| `ospf_interface_status`, `ospf_neighbor_status`, `rsvp_interface_status` | `interface`, `instance` |
+| `bgp_status`, `bgp_route_status`, `ldp_neighbor_status` | `address`, `instance` |
+| `bfd_status` | `address` |
+| `rsvp_neighbor_status` | `instance` |
+| `mpls_lsp_status`, `mpls_lsp_path_status` | `name`, `regex`, `instance` |
+| others | none |
+
+Args without a default are optional. An arg applies to every requested query that declares it:
+
+```sh
+curl -g 'localhost:9326/query?target=192.168.1.1&queries=bgp_status,ospf_neighbor_status&args[instance]=VRF-A'
 ```
 
 ## License

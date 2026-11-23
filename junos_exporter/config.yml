@@ -17,14 +17,15 @@ modules:
       - fpc_status
       - hardware_status
       - environment_status
+      - control_board_status
       - routing_engine_status
       - storage_status
       - physical_interface_status
       - logical_interface_status
-      - interface_optic_status
+      - interface_optics_status
       - lldp_status
       - lacp_status
-      - route_status
+      - route_summary_status
       - arp_status
       - ospf_interface_status
       - ospf_neighbor_status
@@ -32,17 +33,21 @@ modules:
       - bgp_route_status
       - vrrp_status
       - bfd_status
+      - ldp_neighbor_status
+      - rsvp_interface_status
+      - rsvp_neighbor_status
+      - mpls_lsp_status
+      - mpls_lsp_path_status
 
 probes:
   system_alarm_status:
     rpc: get-system-alarm-information
     item: alarm-detail
     metrics:
-      - name: system_alarm_time
-        path: alarm-time
-        type: counter
-        help: Alarm time of show system alarm
-        to_unixtime: True
+      - name: system_alarm_timestamp_seconds
+        path: alarm-time.@seconds
+        type: gauge
+        help: "Alarm time in seconds of show system alarm"
     labels:
       - name: class
         path: alarm-class
@@ -55,11 +60,10 @@ probes:
     rpc: get-alarm-information
     item: alarm-detail
     metrics:
-      - name: chassis_alarm_time
-        path: alarm-time
-        type: counter
-        help: Alarm time of show chassis alarm
-        to_unixtime: True
+      - name: chassis_alarm_timestamp_seconds
+        path: alarm-time.@seconds
+        type: gauge
+        help: "Alarm time in seconds of show chassis alarm"
     labels:
       - name: class
         path: alarm-class
@@ -82,17 +86,17 @@ probes:
           "Offline": 2
           "Present": 1
           "Empty": 0
-      - name: fpc_cpu_usage
+      - name: fpc_cpu_total_percent
         path: cpu-total
         type: gauge
-        help: CPU Utilization Total of show chassis fpc
-      - name: fpc_memory_heap_utilization
+        help: "CPU Utilization Total of show chassis fpc"
+      - name: fpc_memory_heap_percent
         path: memory-heap-utilization
-        help: Memory Utilization Heap of show chassis fpc
+        help: "Memory Utilization Heap of show chassis fpc"
         type: gauge
-      - name: fpc_memory_buffer_utilization
+      - name: fpc_memory_buffer_percent
         path: memory-buffer-utilization
-        help: Memory Utilization Buffer of show chassis fpc
+        help: "Memory Utilization Buffer of show chassis fpc"
         type: gauge
     labels:
       - name: slot
@@ -111,11 +115,11 @@ probes:
       - name: hardware_info
         value: 1
         type: gauge
-        help: Infomation of show chassis hardware
+        help: "Information of show chassis hardware"
     labels:
       - name: name
         path: name
-      - name: serial
+      - name: serial_number
         path: serial-number
       - name: part_number
         path: part-number
@@ -126,7 +130,7 @@ probes:
     rpc: get-environment-information
     item: environment-item
     metrics:
-      - name: environment_status
+      - name: environment_state
         path: status
         type: gauge
         help: "Status of show chassis environment(OK: 4, Testing: 3, Check: 2, Failed: 1, Absent: 0)"
@@ -136,9 +140,29 @@ probes:
           "Check": 2
           "Failed": 1
           "Absent": 0
+      - name: temperature_celsius
+        path: temperature.@celsius
     labels:
       - name: name
         path: name
+
+  control_board_status:
+    rpc: get-environment-cb-information
+    item: environment-component-item
+    metrics:
+      - name: control_board_state
+        path: state
+        type: gauge
+        help: "Current state of show chassis environment cb(Online: 1, Offline: 0)"
+        value_transform:
+          "Online Master": 1
+          "Online Standby": 1
+          "Online": 1
+          "Offline": 0
+    labels:
+      - name: slot
+        path: name
+        regex: CB.*(\d+)
 
   routing_engine_status:
     rpc: get-route-engine-information
@@ -152,35 +176,34 @@ probes:
           "master": 2
           "backup": 1
           "disabled": 0
-      - name: routing_engine_memory_buffer_utilization
+      - name: routing_engine_memory_buffer_percent
         path: memory-buffer-utilization
         type: gauge
-        help: Memory utilization of show chassis routing-engine
-      - name: routing_engine_cpu_user_utilization
+        help: "Memory utilization of show chassis routing-engine"
+      - name: routing_engine_cpu_user_percent
         path: cpu-user
         type: gauge
-        help: CPU utilization User of show chassis routing-engine
-      - name: routing_engine_cpu_background_utilization
+        help: "CPU utilization User of show chassis routing-engine"
+      - name: routing_engine_cpu_background_percent
         path: cpu-background
         type: gauge
-        help: CPU utilization Background of show chassis routing-engine
-      - name: routing_engine_cpu_system_utilization
+        help: "CPU utilization Background of show chassis routing-engine"
+      - name: routing_engine_cpu_system_percent
         path: cpu-system
         type: gauge
-        help: CPU utilization Kernel of show chassis routing-engine
-      - name: routing_engine_cpu_interrupt_utilization
+        help: "CPU utilization Kernel of show chassis routing-engine"
+      - name: routing_engine_cpu_interrupt_percent
         path: cpu-interrupt
         type: gauge
-        help: CPU utilization Interrupt of show chassis routing-engine
-      - name: routing_engine_cpu_idle_utilization
+        help: "CPU utilization Interrupt of show chassis routing-engine"
+      - name: routing_engine_cpu_idle_percent
         path: cpu-idle
         type: gauge
-        help: CPU utilization Idle of show chassis routing-engine
-      - name: routing_engine_start_time
-        path: start-time
-        type: counter
-        help: Start time of show chassis routing-engine
-        to_unixtime: True
+        help: "CPU utilization Idle of show chassis routing-engine"
+      - name: routing_engine_start_time_seconds
+        path: start-time.@seconds
+        type: gauge
+        help: "Start time in seconds of show chassis routing-engine"
     labels:
       - name: slot
         path: slot
@@ -192,9 +215,9 @@ probes:
       - name: storage_used_percent
         path: used-percent
         type: gauge
-        help: Capacity of show system storage
+        help: "Capacity of show system storage"
     labels:
-      - name: name
+      - name: filesystem
         path: filesystem-name
       - name: mounted_on
         path: mounted-on
@@ -220,10 +243,10 @@ probes:
         value_transform:
           up: 2
           down: 1
-      - name: interface_speed
+      - name: interface_speed_bits_per_second
         path: speed
         type: gauge
-        help: Speed of show interfaces extensive
+        help: "Speed of show interfaces extensive"
         value_transform:
           100mbps: 100000000
           1000mbps: 1000000000
@@ -231,111 +254,110 @@ probes:
           1Gbps: 1000000000
           10Gbps: 10000000000
           100Gbps: 100000000000
-      - name: interface_lastflap_seconds
-        path: interface-flapped
-        type: counter
-        help: Last flapped of show interfaces extensive
-        to_unixtime: True
+      - name: interface_last_flapped_timestamp_seconds
+        path: interface-flapped.@seconds
+        type: gauge
+        help: "Last flapped in seconds of show interfaces extensive"
       - name: interface_input_errors
         path: input-error-list.input-errors
         type: counter
-        help: Input Errors of show interfaces extensive
+        help: "Input Errors of show interfaces extensive"
       - name: interface_input_drops
         path: input-error-list.input-drops
         type: counter
-        help: Input Drops of show interfaces extensive
+        help: "Input Drops of show interfaces extensive"
       - name: interface_framing_errors
         path: input-error-list.framing-errors
         type: counter
-        help: Input Framing errors of show interfaces extensive
+        help: "Input Framing errors of show interfaces extensive"
       - name: interface_input_runts
         path: input-error-list.input-runts
         type: counter
-        help: Input Runts of show interfaces extensive
-      - name: interface_input_discards
+        help: "Input Runts of show interfaces extensive"
+      - name: interface_input_policed_discards
         path: input-error-list.input-discards
         type: counter
-        help: Input Policed discards of show interfaces extensive
+        help: "Input Policed discards of show interfaces extensive"
       - name: interface_input_l3_incompletes
         path: input-error-list.input-l3-incompletes
         type: counter
-        help: Input L3 incompletes of show interfaces extensive
+        help: "Input L3 incompletes of show interfaces extensive"
       - name: interface_input_l2_channel_errors
         path: input-error-list.input-l2-channel-errors
         type: counter
-        help: Input L2 channel errors of show interfaces extensive
+        help: "Input L2 channel errors of show interfaces extensive"
       - name: interface_input_l2_mismatch_timeouts
         path: input-error-list.input-l2-mismatch-timeouts
         type: counter
-        help: Input L2 mismatch timeouts of show interfaces extensive
+        help: "Input L2 mismatch timeouts of show interfaces extensive"
       - name: interface_input_fifo_errors
         path: input-error-list.input-fifo-errors
         type: counter
-        help: Input FIFO errors of show interfaces extensive
+        help: "Input FIFO errors of show interfaces extensive"
       - name: interface_input_resource_errors
         path: input-error-list.input-resource-errors
         type: counter
-        help: Input Resource errors of show interfaces extensive
+        help: "Input Resource errors of show interfaces extensive"
       - name: interface_carrier_transitions
         path: output-error-list.carrier-transitions
         type: counter
-        help: Output Carrier transitions of show interfaces extensive
+        help: "Output Carrier transitions of show interfaces extensive"
       - name: interface_output_errors
         path: output-error-list.output-errors
         type: counter
-        help: Output Errors of show interfaces extensive
+        help: "Output Errors of show interfaces extensive"
       - name: interface_output_drops
         path: output-error-list.output-drops
         type: counter
-        help: Output Drops of show interfaces extensive
+        help: "Output Drops of show interfaces extensive"
       - name: interface_collisions
         path: output-error-list.output-collisions
         type: counter
-        help: Output Collisions of show interfaces extensive
+        help: "Output Collisions of show interfaces extensive"
       - name: interface_aged_packets
         path: output-error-list.aged-packets
         type: counter
-        help: Output Aged packets of show interfaces extensive
+        help: "Output Aged packets of show interfaces extensive"
       - name: interface_mtu_errors
         path: output-error-list.mtu-errors
         type: counter
-        help: Output MTU errors of show interfaces extensive
+        help: "Output MTU errors of show interfaces extensive"
       - name: interface_hs_link_crc_errors
         path: output-error-list.hs-link-crc-errors
         type: counter
-        help: Output HS link CRC errors of show interfaces extensive
+        help: "Output HS link CRC errors of show interfaces extensive"
       - name: interface_output_fifo_errors
         path: output-error-list.output-fifo-errors
         type: counter
-        help: Output FIFO errors of show interfaces extensive
+        help: "Output FIFO errors of show interfaces extensive"
       - name: interface_output_resource_errors
         path: output-error-list.output-resource-errors
         type: counter
-        help: Output Resource errors of show interfaces extensive
+        help: "Output Resource errors of show interfaces extensive"
       - name: interface_bit_error_seconds
         path: ethernet-pcs-statistics.bit-error-seconds
         type: counter
-        help: PCS statistics Bit errors of show interfaces extensive
+        help: "PCS statistics Bit errors of show interfaces extensive"
       - name: interface_errored_blocks_seconds
         path: ethernet-pcs-statistics.errored-blocks-seconds
         type: counter
-        help: PCS statistics Errored blocks of show interfaces extensive
+        help: "PCS statistics Errored blocks of show interfaces extensive"
       - name: interface_input_bytes
         path: traffic-statistics.input-bytes
         type: counter
-        help: Traffic statistics Input Bytes of show interfaces extensive
+        help: "Traffic statistics Input Bytes of show interfaces extensive"
       - name: interface_output_bytes
         path: traffic-statistics.output-bytes
         type: counter
-        help: Traffic statistics Output Bytes of show interfaces extensive
+        help: "Traffic statistics Output Bytes of show interfaces extensive"
       - name: interface_input_packets
         path: traffic-statistics.input-packets
         type: counter
-        help: Traffic statistics Input packets of show interfaces extensive
+        help: "Traffic statistics Input packets of show interfaces extensive"
       - name: interface_output_packets
         path: traffic-statistics.output-packets
         type: counter
-        help: Traffic statistics Output packets of show interfaces extensive
+        help: "Traffic statistics Output packets of show interfaces extensive"
     labels:
       - name: interface
         path: name
@@ -369,19 +391,19 @@ probes:
       - name: interface_input_bytes
         path: traffic-statistics.input-bytes
         type: counter
-        help: Traffic statistics Input Bytes of show interfaces extensive
+        help: "Traffic statistics Input Bytes of show interfaces extensive"
       - name: interface_output_bytes
         path: traffic-statistics.output-bytes
         type: counter
-        help: Traffic statistics Output Bytes of show interfaces extensive
+        help: "Traffic statistics Output Bytes of show interfaces extensive"
       - name: interface_input_packets
         path: traffic-statistics.input-packets
         type: counter
-        help: Traffic statistics Input packets of show interfaces extensive
+        help: "Traffic statistics Input packets of show interfaces extensive"
       - name: interface_output_packets
         path: traffic-statistics.output-packets
         type: counter
-        help: Traffic statistics Output packets of show interfaces extensive
+        help: "Traffic statistics Output packets of show interfaces extensive"
     labels:
       - name: interface
         path: name
@@ -392,23 +414,29 @@ probes:
       - name: description
         path: description
 
-  interface_optic_status:
+  interface_optics_status:
     rpc: get-interface-optics-diagnostics-information
+    container: physical-interface
     args:
       interface_name: '[efgx][et]-*'
-    item: physical-interface
+    item:
+      - optics-diagnostics
+      - optics-diagnostics-lane-values
+    recursive: True
     metrics:
-      - name: interface_rx_optic_power
-        path: optics-diagnostics.rx-signal-avg-optical-power-dbm
+      - name: interface_optics_rx_power_dbm
+        path: rx-signal-avg-optical-power-dbm
         type: gauge
-        help: Laser rx power of show interfaces diagnostics optics
-      - name: interface_tx_optic_power
-        path: optics-diagnostics.laser-output-power-dbm
+        help: "Laser rx power of show interfaces diagnostics optics"
+      - name: interface_optics_tx_power_dbm
+        path: laser-output-power-dbm
         type: gauge
-        help: Laser output power of show interfaces diagnostics optics
+        help: "Laser output power of show interfaces diagnostics optics"
     labels:
       - name: interface
         path: name
+      - name: lane
+        path: lane-index
 
   lldp_status:
     rpc: get-lldp-neighbors-information
@@ -417,7 +445,7 @@ probes:
       - name: lldp_neighbor_info
         value: 1
         type: gauge
-        help: Information of show lldp neighbor
+        help: "Information of show lldp neighbor"
     labels:
       - name: remote
         path: lldp-remote-system-name
@@ -464,19 +492,19 @@ probes:
       - name: interface
         path: name
 
-  route_status:
+  route_summary_status:
     rpc: get-route-summary-information
     container: route-table
     item: protocols
     metrics:
-      - name: route_protocol_route_count
+      - name: route_protocol_routes
         path: protocol-route-count
         type: gauge
-        help: Protocol routes of show route summary
-      - name: route_active_route_count
+        help: "Protocol routes of show route summary"
+      - name: route_active_routes
         path: active-route-count
         type: gauge
-        help: Protocol active routes of show route summary
+        help: "Protocol active routes of show route summary"
     labels:
       - name: table
         path: table-name
@@ -490,10 +518,10 @@ probes:
       no-resolve: True
     item: arp-table-entry
     metrics:
-      - name: arp_time_to_expire
+      - name: arp_time_to_expire_seconds
         path: time-to-expire
         type: gauge
-        help: TTE of show arp expiration-time
+        help: "TTE of show arp expiration-time"
     labels:
       - name: address
         path: ip-address
@@ -515,7 +543,7 @@ probes:
       - name: ospf_interface_cost
         path: interface-cost
         type: gauge
-        help: Cost of show ospf interface detail
+        help: "Cost of show ospf interface detail"
     labels:
       - name: interface
         path: interface-name
@@ -545,11 +573,10 @@ probes:
           "Attempt": 2
           "Init": 1
           "Down": 0
-      - name: ospf_neighbor_uptime
-        path: neighbor-up-time
-        type: counter
-        help: Up of show ospf neighbor extensive
-        to_unixtime: True
+      - name: ospf_neighbor_uptime_seconds
+        path: neighbor-up-time.@seconds
+        type: gauge
+        help: "Uptime in seconds of show ospf neighbor extensive"
     labels:
       - name: interface
         path: interface-name
@@ -577,22 +604,19 @@ probes:
           "Active": 2
           "Connect": 1
           "Idle": 0
-      - name: bgp_neighbor_flap_count
+      - name: bgp_neighbor_flaps
         path: flap-count
         type: counter
-        help: Number of flaps of show bgp summary
-      - name: bgp_neighbor_elapsed_time
-        path: elapsed-time
-        type: counter
-        help: Elapsed time of show bgp summary
-        to_unixtime: True
+        help: "Number of flaps of show bgp summary"
+      - name: bgp_neighbor_elapsed_time_seconds
+        path: elapsed-time.@seconds
+        type: gauge
+        help: "Elapsed time in seconds of show bgp summary"
     labels:
       - name: peer_as
         path: peer-as
-      - name: peer_address
+      - name: address
         path: peer-address
-      - name: peer_type
-        path: peer-type
       - name: description
         path: description
 
@@ -601,29 +625,27 @@ probes:
     container: bgp-peer
     item: bgp-rib
     metrics:
-      - name: bgp_neighbor_active_prefix_count
+      - name: bgp_neighbor_active_prefixes
         path: active-prefix-count
         type: gauge
-        help: Active of show bgp summary
-      - name: bgp_neighbor_received_prefix_count
+        help: "Active prefixes of show bgp summary"
+      - name: bgp_neighbor_received_prefixes
         path: received-prefix-count
         type: gauge
-        help: Received of show bgp summary
-      - name: bgp_neighbor_accepted_prefix_count
+        help: "Received prefixes of show bgp summary"
+      - name: bgp_neighbor_accepted_prefixes
         path: accepted-prefix-count
         type: gauge
-        help: Accepted of show bgp summary
-      - name: bgp_neighbor_suppressed_prefix_count
+        help: "Accepted prefixes of show bgp summary"
+      - name: bgp_neighbor_suppressed_prefixes
         path: suppressed-prefix-count
         type: gauge
-        help: Damped of show bgp summary
+        help: "Suppressed prefixes of show bgp summary"
     labels:
       - name: peer_as
         path: peer-as
-      - name: peer_address
+      - name: address
         path: peer-address
-      - name: peer_type
-        path: peer-type
       - name: description
         path: description
       - name: table
@@ -632,14 +654,14 @@ probes:
   vrrp_status:
     rpc: get-vrrp-information
     args:
-      detail: True
+      extensive: True
     container: vrrp-interface
     item: vrrp-vlan
     metrics:
       - name: vrrp_state
         path: vrrp-state
         type: gauge
-        help: "VR State of show vrrp detail(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
+        help: "VR State of show vrrp extensive(master: 5, backup: 4, transition: 3, bringup: 2, init: 1, idle: 0)"
         value_transform:
           "master": 5
           "backup": 4
@@ -647,16 +669,26 @@ probes:
           "bringup": 2
           "init": 1
           "idle": 0
-      - name: vrrp_virtual_router_uptime
-        path: virtual-router-uptime
+      - name: vrrp_priority
+        path: group-priority
         type: gauge
-        help: "Virtual router uptime of show vrrp detail"
-        to_unixtime: True
-      - name: vrrp_master_router_uptime
-        path: master-router-uptime
-        type: gauge
-        help: "Master router uptime of show vrrp detail"
-        to_unixtime: True
+        help: "Priority of show vrrp extensive"
+      - name: vrrp_idle_master_transitions
+        path: group-vrrp-state-transition-statistics.idle-master-transitions
+        type: counter
+        help: "State transition(idle to master) of show vrrp extensive"
+      - name: vrrp_idle_backup_transitions
+        path: group-vrrp-state-transition-statistics.idle-backup-transitions
+        type: counter
+        help: "State transition(idle to backup) of show vrrp extensive"
+      - name: vrrp_backup_master_transitions
+        path: group-vrrp-state-transition-statistics.backup-master-transitions
+        type: counter
+        help: "State transition(backup to master) of show vrrp extensive"
+      - name: vrrp_master_backup_transitions
+        path: group-vrrp-state-transition-statistics.master-backup-transitions
+        type: counter
+        help: "State transition(master to backup) of show vrrp extensive"
     labels:
       - name: interface
         path: physical-interface
@@ -689,5 +721,928 @@ probes:
       - name: unit
         path: session-interface
         regex: .*\.(\d+)
-      - name: neighbor
+      - name: address
         path: session-neighbor
+
+  ldp_neighbor_status:
+    rpc: get-ldp-neighbor-information
+    args:
+      detail: True
+    item: ldp-neighbor
+    metrics:
+      - name: ldp_neighbor_uptime_seconds
+        path: ldp-up-time.@seconds
+        type: gauge
+        help: "Up time in seconds of show ldp neighbor detail"
+    labels:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: address
+        path: ldp-neighbor-address
+      - name: transport_address
+        path: ldp-transport-address
+
+  rsvp_interface_status:
+    rpc: get-rsvp-interface-information
+    item: rsvp-interface
+    metrics:
+      - name: rsvp_interface_state
+        path: rsvp-status
+        type: gauge
+        help: "State of show rsvp interface(Up: 1, Down: 0)"
+        value_transform:
+          "Up": 1
+          "Down": 0
+      - name: rsvp_interface_active_reservations
+        path: rsvp-telink.active-reservation
+        type: gauge
+        help: "Active reservations of show rsvp interface"
+      - name: rsvp_interface_static_bandwidth_bits_per_second
+        path: rsvp-telink.static-bandwidth-bps
+        type: gauge
+        help: "Static bandwidth in bps of show rsvp interface"
+      - name: rsvp_interface_available_bandwidth_bits_per_second
+        path: rsvp-telink.available-bandwidth-bps
+        type: gauge
+        help: "Available bandwidth in bps of show rsvp interface"
+      - name: rsvp_interface_reserved_bandwidth_bits_per_second
+        path: rsvp-telink.total-reserved-bandwidth-bps
+        type: gauge
+        help: "Reserved bandwidth in bps of show rsvp interface"
+    labels:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+
+  rsvp_neighbor_status:
+    rpc: get-rsvp-neighbor-information
+    args:
+      detail: True
+    item: rsvp-neighbor
+    metrics:
+      - name: rsvp_neighbor_state
+        path: rsvp-neighbor-status
+        type: gauge
+        help: "State of show rsvp neighbor detail(Up: 1, Dead: 0)"
+        value_transform:
+          "Up": 1
+          "Dead": 0
+      - name: rsvp_neighbor_last_changed_seconds
+        path: last-changed-time.@seconds
+        type: gauge
+        help: "Seconds since the last state change of show rsvp neighbor detail"
+    labels:
+      - name: address
+        path: rsvp-neighbor-address
+      - name: interface
+        path: rsvp-neighbor-interface
+        regex: ([^\.]+).*
+      - name: unit
+        path: rsvp-neighbor-interface
+        regex: .*\.(\d+)
+
+  mpls_lsp_status:
+    rpc: get-mpls-lsp-information
+    args:
+      ingress: True
+      detail: True
+    container: rsvp-session-data.rsvp-session
+    item: mpls-lsp
+    metrics:
+      - name: mpls_lsp_state
+        path: lsp-state
+        type: gauge
+        help: "State of show mpls lsp ingress detail(Up: 1, Dn: 0)"
+        value_transform:
+          "Up": 1
+          "Dn": 0
+    labels:
+      - name: name
+        path: name
+      - name: source_address
+        path: source-address
+      - name: destination_address
+        path: destination-address
+
+  mpls_lsp_path_status:
+    rpc: get-mpls-lsp-information
+    args:
+      ingress: True
+      detail: True
+    container: rsvp-session-data.rsvp-session.mpls-lsp
+    item: mpls-lsp-path
+    metrics:
+      - name: mpls_lsp_path_state
+        path: path-state
+        type: gauge
+        help: "Path state of show mpls lsp ingress detail(Up: 1, Dn: 0)"
+        value_transform:
+          "Up": 1
+          "Dn": 0
+      - name: mpls_lsp_path_flaps
+        path: path-flap-count
+        type: counter
+        help: "Path flap count of show mpls lsp ingress detail"
+    labels:
+      - name: name
+        path: ^name
+      - name: path
+        path: title
+      - name: source_address
+        path: source-address
+      - name: destination_address
+        path: destination-address
+
+queries:
+  system_alarm_status:
+    rpc: get-system-alarm-information
+    item: alarm-detail
+    fields:
+      - name: class
+        path: alarm-class
+      - name: description
+        path: alarm-description
+      - name: type
+        path: alarm-type
+      - name: alarm_time
+        path: alarm-time
+
+  chassis_alarm_status:
+    rpc: get-alarm-information
+    item: alarm-detail
+    fields:
+      - name: class
+        path: alarm-class
+      - name: description
+        path: alarm-description
+      - name: type
+        path: alarm-type
+      - name: alarm_time
+        path: alarm-time
+
+  fpc_status:
+    rpc: get-fpc-information
+    item: fpc
+    recursive: True
+    args:
+      fpc-slot: ""
+    params:
+      slot: fpc-slot
+    fields:
+      - name: slot
+        path: slot
+      - name: state
+        path: state
+      - name: temperature
+        path: temperature.@celsius
+      - name: cpu_total_utilization
+        path: cpu-total
+      - name: cpu_interrupt_utilization
+        path: cpu-interrupt
+      - name: memory_heap_utilization
+        path: memory-heap-utilization
+      - name: memory_buffer_utilization
+        path: memory-buffer-utilization
+
+  hardware_status:
+    rpc: get-chassis-inventory
+    item:
+      - chassis
+      - chassis-module
+      - chassis-sub-module
+      - chassis-sub-sub-module
+      - chassis-sub-sub-sub-module
+    recursive: True
+    fields:
+      - name: name
+        path: name
+      - name: serial_number
+        path: serial-number
+      - name: part_number
+        path: part-number
+      - name: description
+        path: description
+
+  environment_status:
+    rpc: get-environment-information
+    item: environment-item
+    fields:
+      - name: name
+        path: name
+      - name: state
+        path: status
+
+  control_board_status:
+    rpc: get-environment-cb-information
+    item: environment-component-item
+    args:
+      slot: ""
+    fields:
+      - name: slot
+        path: name
+        regex: CB.*(\d+)
+      - name: state
+        path: state
+
+  routing_engine_status:
+    rpc: get-route-engine-information
+    item: route-engine
+    args:
+      slot: ""
+    fields:
+      - name: slot
+        path: slot
+      - name: state
+        path: mastership-state
+      - name: memory_buffer_utilization
+        path: memory-buffer-utilization
+      - name: cpu_user_utilization
+        path: cpu-user
+      - name: cpu_background_utilization
+        path: cpu-background
+      - name: cpu_system_utilization
+        path: cpu-system
+      - name: cpu_interrupt_utilization
+        path: cpu-interrupt
+      - name: cpu_idle_utilization
+        path: cpu-idle
+      - name: start_time
+        path: start-time
+      - name: uptime
+        path: up-time
+      - name: last_reboot_reason
+        path: last-reboot-reason
+
+  storage_status:
+    rpc: get-system-storage
+    item: filesystem
+    fields:
+      - name: filesystem
+        path: filesystem-name
+      - name: size
+        path: total-blocks.@format
+      - name: used
+        path: used-blocks.@format
+      - name: avail
+        path: available-blocks.@format
+      - name: mounted_on
+        path: mounted-on
+      - name: capacity
+        path: used-percent
+
+  physical_interface_status:
+    rpc: get-interface-information
+    args:
+      extensive: True
+      interface_name: '[afgxe][et]-*'
+    params:
+      interface: interface_name
+    item: physical-interface
+    fields:
+      - name: interface
+        path: name
+      - name: description
+        path: description
+      - name: admin_status
+        path: admin-status
+      - name: oper_status
+        path: oper-status
+      - name: speed
+        path: speed
+      - name: last_flapped
+        path: interface-flapped
+      - name: input_errors
+        path: input-error-list.input-errors
+      - name: input_drops
+        path: input-error-list.input-drops
+      - name: framing_errors
+        path: input-error-list.framing-errors
+      - name: input_runts
+        path: input-error-list.input-runts
+      - name: input_policed_discards
+        path: input-error-list.input-discards
+      - name: input_l3_incompletes
+        path: input-error-list.input-l3-incompletes
+      - name: input_l2_channel_errors
+        path: input-error-list.input-l2-channel-errors
+      - name: input_l2_mismatch_timeouts
+        path: input-error-list.input-l2-mismatch-timeouts
+      - name: input_fifo_errors
+        path: input-error-list.input-fifo-errors
+      - name: input_resource_errors
+        path: input-error-list.input-resource-errors
+      - name: carrier_transitions
+        path: output-error-list.carrier-transitions
+      - name: output_errors
+        path: output-error-list.output-errors
+      - name: output_drops
+        path: output-error-list.output-drops
+      - name: collisions
+        path: output-error-list.output-collisions
+      - name: aged_packets
+        path: output-error-list.aged-packets
+      - name: mtu_errors
+        path: output-error-list.mtu-errors
+      - name: hs_link_crc_errors
+        path: output-error-list.hs-link-crc-errors
+      - name: output_fifo_errors
+        path: output-error-list.output-fifo-errors
+      - name: output_resource_errors
+        path: output-error-list.output-resource-errors
+      - name: bit_error_seconds
+        path: ethernet-pcs-statistics.bit-error-seconds
+      - name: errored_blocks_seconds
+        path: ethernet-pcs-statistics.errored-blocks-seconds
+      - name: input_bytes
+        path: traffic-statistics.input-bytes
+      - name: output_bytes
+        path: traffic-statistics.output-bytes
+      - name: input_packets
+        path: traffic-statistics.input-packets
+      - name: output_packets
+        path: traffic-statistics.output-packets
+
+  logical_interface_status:
+    rpc: get-interface-information
+    args:
+      detail: True
+      interface_name: '[afgxe][et]-*'
+    params:
+      interface: interface_name
+    container: physical-interface
+    item: logical-interface
+    fields:
+      - name: interface
+        path: name
+        regex: ([^\.]*).*
+      - name: unit
+        path: name
+        regex: .*\.(\d+)
+      - name: description
+        path: description
+      - name: admin_status
+        path: if-config-flags.iff-down
+        exists: True
+        value_transform:
+          "true": down
+          "false": up
+      - name: oper_status
+        path: if-config-flags.iff-up
+        exists: True
+        value_transform:
+          "true": up
+          "false": down
+      - name: input_bytes
+        path: traffic-statistics.input-bytes
+      - name: output_bytes
+        path: traffic-statistics.output-bytes
+      - name: input_packets
+        path: traffic-statistics.input-packets
+      - name: output_packets
+        path: traffic-statistics.output-packets
+
+  interface_optics_status:
+    rpc: get-interface-optics-diagnostics-information
+    container: physical-interface
+    args:
+      interface_name: '[efgx][et]-*'
+    params:
+      interface: interface_name
+    item:
+      - optics-diagnostics
+      - optics-diagnostics-lane-values
+    recursive: True
+    fields:
+      - name: interface
+        path: name
+      - name: rx_power
+        path: rx-signal-avg-optical-power-dbm
+      - name: tx_power
+        path: laser-output-power-dbm
+      - name: lane
+        path: lane-index
+
+  lldp_status:
+    rpc: get-lldp-neighbors-information
+    item: lldp-neighbor-information
+    fields:
+      - name: interface
+        path: lldp-local-port-id
+      - name: remote
+        path: lldp-remote-system-name
+      - name: remote_interface
+        path: lldp-remote-port-id
+
+  lacp_status:
+    rpc: get-lacp-interface-information
+    args:
+      interface_name: ''
+    params:
+      interface: interface_name
+    container: lacp-interface-information
+    item: lag-lacp-protocol
+    fields:
+      - name: interface
+        path: name
+      - name: receive_state
+        path: lacp-receive-state
+      - name: transmit_state
+        path: lacp-transmit-state
+      - name: mux_state
+        path: lacp-mux-state
+
+  route_summary_status:
+    rpc: get-route-summary-information
+    args:
+      table: ''
+    container: route-table
+    item: protocols
+    fields:
+      - name: table
+        path: table-name
+      - name: protocol
+        path: protocol-name
+      - name: route_count
+        path: protocol-route-count
+      - name: active_route_count
+        path: active-route-count
+
+  route_status:
+    rpc: get-route-information
+    args:
+      extensive: True
+      destination: ''
+      table: ''
+      protocol: ''
+    container: route-table
+    item: rt-entry
+    recursive: True
+    fields:
+      - name: table
+        path: table-name
+      - name: destination
+        path: rt-destination
+      - name: prefix_length
+        path: rt-prefix-length
+      - name: protocol
+        path: protocol-name
+      - name: active
+        path: current-active
+        exists: True
+      - name: state
+        path: rt-entry-state
+      - name: inactive_reason
+        path: inactive-reason
+      - name: preference
+        path: preference
+      - name: metric
+        path: metric
+      - name: local_preference
+        path: local-preference
+      - name: as_path
+        path: bgp-path-attributes.attr-as-path-effective.attr-value
+      - name: next_hop
+        path:
+          - 'nh.#(selected-next-hop=="").to'
+          - nh.0.to
+      - name: interface
+        path:
+          - 'nh.#(selected-next-hop=="").via'
+          - nh.0.via
+        regex: ([^\.]*).*
+      - name: unit
+        path:
+          - 'nh.#(selected-next-hop=="").via'
+          - nh.0.via
+        regex: .*\.(\d+)
+      - name: peer_as
+        path: peer-as
+      - name: peer_id
+        path: peer-id
+      - name: local_as
+        path: local-as
+      - name: age
+        path: age
+      - name: validation_state
+        path: validation-state
+
+  bgp_advertised_route_status:
+    rpc: get-route-information
+    args:
+      advertising_protocol_name: bgp
+      neighbor: null
+      table: ''
+      destination: ''
+    params:
+      address: neighbor
+    container: route-table
+    item: rt-entry
+    recursive: True
+    fields:
+      - name: table
+        path: table-name
+      - name: destination
+        path: rt-destination
+      - name: prefix_length
+        path: rt-prefix-length
+      - name: active
+        path: active-tag
+        value_transform:
+          "*": "true"
+          _: "false"
+      - name: local_preference
+        path: local-preference
+      - name: med
+        path: med
+      - name: as_path
+        path: as-path
+        regex: (.+)
+      - name: next_hop
+        path:
+          - 'nh.#(selected-next-hop=="").to'
+          - nh.0.to
+
+  bgp_received_route_status:
+    rpc: get-route-information
+    args:
+      receive_protocol_name: bgp
+      neighbor: null
+      table: ''
+      destination: ''
+    params:
+      address: neighbor
+    container: route-table
+    item: rt-entry
+    recursive: True
+    fields:
+      - name: table
+        path: table-name
+      - name: destination
+        path: rt-destination
+      - name: prefix_length
+        path: rt-prefix-length
+      - name: active
+        path: active-tag
+        value_transform:
+          "*": "true"
+          _: "false"
+      - name: local_preference
+        path: local-preference
+      - name: med
+        path: med
+      - name: as_path
+        path: as-path
+        regex: (.+)
+      - name: next_hop
+        path:
+          - 'nh.#(selected-next-hop=="").to'
+          - nh.0.to
+
+  arp_status:
+    rpc: get-arp-table-information
+    args:
+      expiration-time: True
+      no-resolve: True
+      interface: ''
+    item: arp-table-entry
+    fields:
+      - name: address
+        path: ip-address
+      - name: mac
+        path: mac-address
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: time_to_expire
+        path: time-to-expire
+
+  ospf_interface_status:
+    rpc: get-ospf-interface-information
+    args:
+      detail: True
+      interface_name: ''
+      instance: ''
+    params:
+      interface: interface_name
+    item: ospf-interface
+    fields:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: area
+        path: ospf-area
+      - name: cost
+        path: interface-cost
+      - name: hello_interval
+        path: hello-interval
+      - name: dead_interval
+        path: dead-interval
+      - name: retransmit_interval
+        path: retransmit-interval
+
+  ospf_neighbor_status:
+    rpc: get-ospf-neighbor-information
+    args:
+      extensive: True
+      interface: ''
+      instance: ''
+    item: ospf-neighbor
+    fields:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: address
+        path: neighbor-address
+      - name: area
+        path: ospf-area
+      - name: state
+        path: ospf-neighbor-state
+      - name: uptime
+        path: neighbor-up-time
+
+  bgp_status:
+    rpc: get-bgp-neighbor-information
+    args:
+      neighbor_address: ''
+      instance: ''
+    params:
+      address: neighbor_address
+    item: bgp-peer
+    fields:
+      - name: peer_as
+        path: peer-as
+      - name: address
+        path: peer-address
+        regex: ([^+]+)
+      - name: peer_type
+        path: peer-type
+      - name: description
+        path: description
+      - name: instance
+        path: peer-cfg-rti
+      - name: peer_group
+        path: peer-group
+      - name: local_address
+        path: local-address
+        regex: ([^+]+)
+      - name: local_as
+        path: local-as
+      - name: interface
+        path: local-interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: local-interface-name
+        regex: .*\.(\d+)
+      - name: state
+        path: peer-state
+      - name: flap_count
+        path: flap-count
+      - name: elapsed_time
+        path: elapsed-time
+      - name: peer_id
+        path: peer-id
+      - name: last_state
+        path: last-state
+      - name: last_event
+        path: last-event
+      - name: last_error
+        path: last-error
+      - name: hold_time
+        path: active-holdtime
+
+  bgp_route_status:
+    rpc: get-bgp-neighbor-information
+    args:
+      neighbor_address: ''
+      instance: ''
+    params:
+      address: neighbor_address
+    container: bgp-peer
+    item: bgp-rib
+    fields:
+      - name: peer_as
+        path: peer-as
+      - name: address
+        path: peer-address
+        regex: ([^+]+)
+      - name: peer_type
+        path: peer-type
+      - name: description
+        path: description
+      - name: instance
+        path: peer-cfg-rti
+      - name: peer_group
+        path: peer-group
+      - name: local_address
+        path: local-address
+        regex: ([^+]+)
+      - name: local_as
+        path: local-as
+      - name: interface
+        path: local-interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: local-interface-name
+        regex: .*\.(\d+)
+      - name: table
+        path: name
+      - name: active_prefix_count
+        path: active-prefix-count
+      - name: received_prefix_count
+        path: received-prefix-count
+      - name: accepted_prefix_count
+        path: accepted-prefix-count
+      - name: suppressed_prefix_count
+        path: suppressed-prefix-count
+      - name: advertised_prefix_count
+        path: advertised-prefix-count
+
+  vrrp_status:
+    rpc: get-vrrp-information
+    args:
+      extensive: True
+    container: vrrp-interface
+    item: vrrp-vlan
+    fields:
+      - name: interface
+        path: physical-interface
+      - name: unit
+        path: unit
+      - name: mode
+        path:
+          - vrrp-mode
+          - active-inherit.vrrp-mode
+      - name: group
+        path: group
+      - name: state
+        path: vrrp-state
+      - name: priority
+        path: group-priority
+      - name: advertisement_interval
+        path: advertisement-interval
+      - name: advertisement_threshold
+        path: advertisement-threshold
+      - name: local_address
+        path: vlan-address
+      - name: virtual_address
+        path: preempt-hold.vip
+      - name: virtual_mac
+        path: virtual-mac
+      - name: master_address
+        path: master-router
+      - name: idle_master_transitions
+        path: group-vrrp-state-transition-statistics.idle-master-transitions
+      - name: idle_backup_transitions
+        path: group-vrrp-state-transition-statistics.idle-backup-transitions
+      - name: backup_master_transitions
+        path: group-vrrp-state-transition-statistics.backup-master-transitions
+      - name: master_backup_transitions
+        path: group-vrrp-state-transition-statistics.master-backup-transitions
+
+  bfd_status:
+    rpc: get-bfd-session-information
+    item: bfd-session
+    fields:
+      - name: interface
+        path: session-interface
+        regex: ([^\.]*).*
+      - name: unit
+        path: session-interface
+        regex: .*\.(\d+)
+      - name: address
+        path: session-neighbor
+      - name: state
+        path: session-state
+
+  ldp_neighbor_status:
+    rpc: get-ldp-neighbor-information
+    args:
+      detail: True
+      neighbor: ''
+      instance: ''
+    params:
+      address: neighbor
+    item: ldp-neighbor
+    fields:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: address
+        path: ldp-neighbor-address
+      - name: transport_address
+        path: ldp-transport-address
+      - name: uptime
+        path: ldp-up-time
+
+  rsvp_interface_status:
+    rpc: get-rsvp-interface-information
+    args:
+      interface_name: ''
+      instance: ''
+    params:
+      interface: interface_name
+    item: rsvp-interface
+    fields:
+      - name: interface
+        path: interface-name
+        regex: ([^\.]*).*
+      - name: unit
+        path: interface-name
+        regex: .*\.(\d+)
+      - name: state
+        path: rsvp-status
+      - name: active_reservations
+        path: rsvp-telink.active-reservation
+      - name: static_bandwidth_bps
+        path: rsvp-telink.static-bandwidth-bps
+      - name: available_bandwidth_bps
+        path: rsvp-telink.available-bandwidth-bps
+      - name: reserved_bandwidth_bps
+        path: rsvp-telink.total-reserved-bandwidth-bps
+
+  rsvp_neighbor_status:
+    rpc: get-rsvp-neighbor-information
+    args:
+      detail: True
+      instance: ''
+    item: rsvp-neighbor
+    fields:
+      - name: address
+        path: rsvp-neighbor-address
+      - name: interface
+        path: rsvp-neighbor-interface
+        regex: ([^\.]+).*
+      - name: unit
+        path: rsvp-neighbor-interface
+        regex: .*\.(\d+)
+      - name: state
+        path: rsvp-neighbor-status
+      - name: last_changed_time
+        path: last-changed-time
+      - name: neighbor_up_count
+        path: neighbor-up-count
+      - name: neighbor_down_count
+        path: neighbor-down-count
+
+  mpls_lsp_status:
+    rpc: get-mpls-lsp-information
+    args:
+      ingress: True
+      detail: True
+      name: ''
+      regex: ''
+      instance: ''
+    container: rsvp-session-data.rsvp-session
+    item: mpls-lsp
+    fields:
+      - name: name
+        path: name
+      - name: source_address
+        path: source-address
+      - name: destination_address
+        path: destination-address
+      - name: state
+        path: lsp-state
+
+  mpls_lsp_path_status:
+    rpc: get-mpls-lsp-information
+    args:
+      ingress: True
+      detail: True
+      name: ''
+      regex: ''
+      instance: ''
+    container: rsvp-session-data.rsvp-session.mpls-lsp
+    item: mpls-lsp-path
+    fields:
+      - name: name
+        path: ^name
+      - name: path
+        path: title
+      - name: source_address
+        path: source-address
+      - name: destination_address
+        path: destination-address
+      - name: state
+        path: path-state
+      - name: flap_count
+        path: path-flap-count
