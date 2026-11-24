@@ -13,6 +13,11 @@ To allow `junos-exporter` connectivity via NETCONF over SSH, ensure the followin
 set system service netconf ssh
 ```
 
+> **Note**: 0.2.0 introduces the following breaking changes from 0.1.0.
+> - Remove `general.ssh_config` and stop reading `~/.ssh/config`; use `proxy_jump` in `credentials` to reach devices via a jump host.
+> - Change `junos_up` to report whether the scrape completed, and add `junos_rpc_success` for each probe. An unreachable device or a timeout now returns HTTP 200 with `junos_up 0` instead of HTTP 500/504.
+> - Remove the `/debug` endpoint.
+
 > **Note**: 0.1.0 introduces the following breaking changes from 0.0.12.
 > - Change the parser from PyEZ Tables and Views to [pygxml](https://github.com/minefuto/pygxml).
 > - Change the `config.yml` format.
