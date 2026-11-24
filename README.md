@@ -187,7 +187,7 @@ They split the two kinds of failure apart, so an alert points at the right side:
 
 - `up == 0` -- the exporter is at fault: an undefined `module` or `credential`, a reply it cannot interpret, or a probe definition that fails to parse. The exporter answers with HTTP 500 and Prometheus records the scrape as failed
 - `junos_up == 0` -- the device is at fault: unreachable, or the connection died before the scrape finished. No `junos_rpc_success` is exposed in this case
-- `junos_rpc_success == 0` -- the device gave no usable answer to that one RPC: an `rpc-error`, which also happens when a platform does not support it, or a reply the exporter could not read back. The rest of the scrape is unaffected, and `/debug` reports the reason
+- `junos_rpc_success == 0` -- the device gave no usable answer to that one RPC: an `rpc-error`, which also happens when a platform does not support it, or a reply the exporter could not read back. The rest of the scrape is unaffected, and the exporter log reports the reason
 
 ### Selecting a module
 
@@ -396,12 +396,6 @@ show vrrp extensive | display xml rpc
 
 # The reply XML, to work out container / item / path
 show vrrp extensive | display xml
-```
-
-Then `/debug` shows the records the current definition extracts from that reply.
-
-```sh
-curl 'localhost:9326/debug?target=192.168.1.1&probe=vrrp_status'
 ```
 
 ## Query

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -7,7 +6,7 @@ from datetime import datetime
 from importlib.metadata import version
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -75,25 +74,6 @@ async def probe(
         return exporter.down()
     except DeviceError:
         return exporter.down()
-
-
-@app.get("/debug", tags=["debug"])
-async def debug(
-    connector: Annotated[Connector, Depends(get_connector)],
-    probe: str,
-) -> Response:
-    if probe not in app.state.probes:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Probe is not defined(Probe: {probe})",
-        )
-
-    definition = app.state.probes[probe]
-    async with connector:
-        reply = await connector.get(probe, definition)
-        content = json.dumps(Parser(definition).parse(reply), indent=2)
-
-    return Response(content=content, media_type="application/json")
 
 
 def resolve_args(query: Query, given: dict[str, str]) -> dict[str, str | bool]:
